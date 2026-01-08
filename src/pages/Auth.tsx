@@ -25,6 +25,7 @@ interface InvitationData {
   expires_at: string;
   token: string;
   organizations: { id: string; name: string } | null;
+  invited_role: string | null;
 }
 
 interface CourseInfo {
@@ -68,6 +69,7 @@ export default function AuthPage() {
         .select(`
           id, email, first_name, last_name, job_role,
           organization_id, course_ids, status, expires_at, token,
+          invited_role,
           organizations(id, name)
         `)
         .eq('token', token)
@@ -286,6 +288,15 @@ export default function AuthPage() {
                 <Mail className="w-5 h-5 text-primary" />
                 <span className="font-semibold text-primary">You've been invited!</span>
               </div>
+              
+              {invitationData.invited_role && invitationData.invited_role !== 'learner' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                  <Shield className="w-4 h-4 text-primary" />
+                  <span>Role: <strong>
+                    {invitationData.invited_role === 'org_admin' ? 'Organization Admin' : 'Course Creator'}
+                  </strong></span>
+                </div>
+              )}
               
               {invitationData.organizations && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">

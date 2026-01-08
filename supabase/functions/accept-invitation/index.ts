@@ -29,7 +29,7 @@ Deno.serve(async (req) => {
     // Fetch and validate the invitation
     const { data: invitation, error: fetchError } = await supabase
       .from('user_invitations')
-      .select('id, email, organization_id, course_ids, status, expires_at')
+      .select('id, email, organization_id, course_ids, status, expires_at, invited_role, admin_permissions')
       .eq('token', token)
       .single();
 
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Accepting invitation ${invitation.id} for user ${userId}`);
+    console.log(`Accepting invitation ${invitation.id} for user ${userId}, role: ${invitation.invited_role}`);
 
     // 1. Mark invitation as accepted
     const { error: updateError } = await supabase
@@ -82,10 +82,23 @@ Deno.serve(async (req) => {
     }
 
     // 2. Update user's organization_id in profile
+    let organizationName: string | null = null;
     if (invitation.organization_id) {
+      // Get the organization name for scoping
+      const { data: orgData } = await supabase
+        .from('organizations')
+        .select('name')
+        .eq('id', invitation.organization_id)
+        .single();
+      
+      organizationName = orgData?.name || null;
+
       const { error: profileError } = await supabase
         .from('profiles')
-        .update({ organization_id: invitation.organization_id })
+        .update({ 
+          organization_id: invitation.organization_id,
+          organization: organizationName,
+        })
         .eq('id', userId);
 
       if (profileError) {
@@ -118,6 +131,46 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 4. Grant admin permissions if invited as admin
+    if (invitation.invited_role && invitation.invited_role !== 'learner') {
+      const adminPerms = invitation.admin_permissions || {};
+      
+      const permissionData = {
+        user_id: userId,
+        is_super_admin: false, // Never grant super admin via invitation
+        can_view_users: adminPerms.can_view_users || false,
+        can_manage_users: adminPerms.can_manage_users || false,
+        can_view_courses: adminPerms.can_view_courses || false,
+        can_manage_courses: adminPerms.can_manage_courses || false,
+        organization_scope: organizationName,
+      };
+
+      console.log('Creating admin permissions:', permissionData);
+
+      const { error: permError } = await supabase
+        .from('admin_permissions')
+        .upsert(permissionData, { onConflict: 'user_id' });
+
+      if (permError) {
+        console.error('Failed to create admin permissions:', permError);
+        // Don't throw - user still got the basics
+      } else {
+        console.log(`Granted admin permissions to user ${userId}`);
+      }
+
+      // Update user_roles to 'admin'
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .update({ role: 'admin' })
+        .eq('user_id', userId);
+
+      if (roleError) {
+        console.error('Failed to update user role to admin:', roleError);
+      } else {
+        console.log(`Updated user ${userId} role to admin`);
+      }
+    }
+
     console.log(`Successfully accepted invitation ${invitation.id}`);
 
     return new Response(
@@ -125,7 +178,8 @@ Deno.serve(async (req) => {
         success: true, 
         message: 'Invitation accepted successfully',
         organization_id: invitation.organization_id,
-        course_count: invitation.course_ids?.length || 0
+        course_count: invitation.course_ids?.length || 0,
+        invited_role: invitation.invited_role || 'learner',
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

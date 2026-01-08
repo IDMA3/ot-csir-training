@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Mail, Clock, CheckCircle, XCircle, Loader2, RefreshCw, Trash2, MailOpen } from 'lucide-react';
+import { Search, Mail, Clock, CheckCircle, XCircle, Loader2, RefreshCw, Trash2, MailOpen, Shield, BookOpen, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, isPast } from 'date-fns';
 
@@ -28,6 +28,7 @@ interface Invitation {
   expires_at: string;
   created_at: string;
   accepted_at: string | null;
+  invited_role: string;
 }
 
 export function UserInvitations() {
@@ -372,6 +373,7 @@ export function UserInvitations() {
                     </TableHead>
                     <TableHead>Email</TableHead>
                     <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
                     <TableHead>Organization</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Expires</TableHead>
@@ -392,6 +394,21 @@ export function UserInvitations() {
                         {inv.first_name || inv.last_name 
                           ? `${inv.first_name || ''} ${inv.last_name || ''}`.trim()
                           : '-'}
+                      </TableCell>
+                      <TableCell>
+                        {inv.invited_role === 'org_admin' ? (
+                          <Badge variant="secondary" className="gap-1">
+                            <Shield className="h-3 w-3" />Org Admin
+                          </Badge>
+                        ) : inv.invited_role === 'course_creator' ? (
+                          <Badge variant="outline" className="gap-1">
+                            <BookOpen className="h-3 w-3" />Course Creator
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="gap-1">
+                            <User className="h-3 w-3" />Learner
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
                         {inv.organization_name ? (

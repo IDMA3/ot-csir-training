@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { UserPlus, Loader2, CheckCircle, Mail } from 'lucide-react';
+import { UserPlus, Loader2, CheckCircle, Mail, Shield, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -21,6 +21,13 @@ interface Organization {
 interface Course {
   id: string;
   title: string;
+}
+
+interface AdminPerms {
+  can_view_users: boolean;
+  can_manage_users: boolean;
+  can_view_courses: boolean;
+  can_manage_courses: boolean;
 }
 
 const inviteSchema = z.object({
@@ -36,9 +43,19 @@ export function SingleUserInvite() {
   const [lastName, setLastName] = useState('');
   const [jobRole, setJobRole] = useState('');
   const [selectedOrgId, setSelectedOrgId] = useState<string>('');
+  const [newOrgName, setNewOrgName] = useState('');
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
   const [inviteComplete, setInviteComplete] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  
+  // Role selection state
+  const [invitedRole, setInvitedRole] = useState<string>('learner');
+  const [adminPerms, setAdminPerms] = useState<AdminPerms>({
+    can_view_users: true,
+    can_manage_users: false,
+    can_view_courses: true,
+    can_manage_courses: false,
+  });
 
   const { isSuperAdmin, organizationScope, canManageUsers } = useAdminPermissions();
   const { user, profile } = useAuth();
@@ -91,8 +108,23 @@ export function SingleUserInvite() {
         throw new Error(result.error.errors[0].message);
       }
 
-      // Determine organization ID
-      const orgId = isSuperAdmin ? (selectedOrgId || null) : (orgAdminOrgId || null);
+      let orgId: string | null = null;
+      
+      // Handle new organization creation (super admin only)
+      if (isSuperAdmin && selectedOrgId === '__new__' && newOrgName.trim()) {
+        const { data: newOrg, error: orgError } = await supabase
+          .from('organizations')
+          .insert({ name: newOrgName.trim(), active: true })
+          .select('id')
+          .single();
+        
+        if (orgError) throw new Error('Failed to create organization: ' + orgError.message);
+        orgId = newOrg.id;
+      } else if (isSuperAdmin && selectedOrgId && selectedOrgId !== '__new__') {
+        orgId = selectedOrgId;
+      } else if (!isSuperAdmin && orgAdminOrgId) {
+        orgId = orgAdminOrgId;
+      }
 
       const invitation = {
         email: email.trim(),
@@ -102,12 +134,14 @@ export function SingleUserInvite() {
         organization_id: orgId,
         course_ids: selectedCourseIds,
         invited_by: user?.id,
-        status: 'pending',
+        status: 'pending' as const,
+        invited_role: invitedRole,
+        admin_permissions: invitedRole !== 'learner' ? JSON.parse(JSON.stringify(adminPerms)) : null,
       };
 
       const { data, error } = await supabase
         .from('user_invitations')
-        .insert(invitation)
+        .insert([invitation])
         .select('id')
         .single();
 
@@ -134,6 +168,7 @@ export function SingleUserInvite() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
       queryClient.invalidateQueries({ queryKey: ['invitation-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-organizations-list'] });
       toast.success('Invitation sent successfully!');
       setInviteComplete(true);
     },
@@ -156,9 +191,17 @@ export function SingleUserInvite() {
     setLastName('');
     setJobRole('');
     setSelectedOrgId('');
+    setNewOrgName('');
     setSelectedCourseIds([]);
     setInviteComplete(false);
     setValidationError(null);
+    setInvitedRole('learner');
+    setAdminPerms({
+      can_view_users: true,
+      can_manage_users: false,
+      can_view_courses: true,
+      can_manage_courses: false,
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -185,9 +228,14 @@ export function SingleUserInvite() {
         <CardContent className="py-12 text-center">
           <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-600" />
           <h3 className="text-xl font-semibold mb-2">Invitation Sent!</h3>
-          <p className="text-muted-foreground mb-6">
+          <p className="text-muted-foreground mb-2">
             An email has been sent to <strong>{email}</strong> with instructions to create their account.
           </p>
+          {invitedRole !== 'learner' && (
+            <p className="text-sm text-muted-foreground mb-4">
+              They will be granted <strong>{invitedRole === 'org_admin' ? 'Organization Admin' : 'Course Creator'}</strong> permissions upon registration.
+            </p>
+          )}
           <Button onClick={resetForm}>
             <UserPlus className="h-4 w-4 mr-2" />
             Invite Another User
@@ -264,17 +312,38 @@ export function SingleUserInvite() {
           {/* Organization - only for super admins */}
           {isSuperAdmin ? (
             <div className="space-y-2">
-              <Label>Organization (optional)</Label>
+              <Label>Organization</Label>
               <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select organization" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="__new__">
+                    <span className="flex items-center gap-2">
+                      <Building2 className="h-4 w-4" />
+                      + Create New Organization
+                    </span>
+                  </SelectItem>
                   {organizations.map(org => (
                     <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              
+              {/* New Organization Name Input */}
+              {selectedOrgId === '__new__' && (
+                <div className="mt-3">
+                  <Label htmlFor="newOrgName">New Organization Name *</Label>
+                  <Input
+                    id="newOrgName"
+                    value={newOrgName}
+                    onChange={(e) => setNewOrgName(e.target.value)}
+                    placeholder="Enter organization name"
+                    required={selectedOrgId === '__new__'}
+                    className="mt-1"
+                  />
+                </div>
+              )}
             </div>
           ) : orgAdminOrgName && (
             <div className="space-y-2">
@@ -283,6 +352,67 @@ export function SingleUserInvite() {
               <p className="text-sm text-muted-foreground">
                 User will be added to your organization
               </p>
+            </div>
+          )}
+
+          {/* Role Selection - Super Admin Only */}
+          {isSuperAdmin && (
+            <div className="space-y-2">
+              <Label>User Role</Label>
+              <Select value={invitedRole} onValueChange={setInvitedRole}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="learner">Regular User (Learner)</SelectItem>
+                  <SelectItem value="org_admin">Organization Admin</SelectItem>
+                  <SelectItem value="course_creator">Course Creator</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Admin Permission Toggles */}
+          {isSuperAdmin && invitedRole !== 'learner' && (
+            <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+              <h4 className="font-medium flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Admin Permissions
+              </h4>
+              <p className="text-sm text-muted-foreground">
+                Configure what this {invitedRole === 'org_admin' ? 'Organization Admin' : 'Course Creator'} can access
+              </p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox 
+                    checked={adminPerms.can_view_users} 
+                    onCheckedChange={(c) => setAdminPerms({...adminPerms, can_view_users: !!c})}
+                  />
+                  <span className="text-sm">View Users</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox 
+                    checked={adminPerms.can_manage_users} 
+                    onCheckedChange={(c) => setAdminPerms({...adminPerms, can_manage_users: !!c})}
+                  />
+                  <span className="text-sm">Manage Users</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox 
+                    checked={adminPerms.can_view_courses} 
+                    onCheckedChange={(c) => setAdminPerms({...adminPerms, can_view_courses: !!c})}
+                  />
+                  <span className="text-sm">View Courses</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox 
+                    checked={adminPerms.can_manage_courses} 
+                    onCheckedChange={(c) => setAdminPerms({...adminPerms, can_manage_courses: !!c})}
+                  />
+                  <span className="text-sm">Manage Courses</span>
+                </label>
+              </div>
             </div>
           )}
 
@@ -317,7 +447,7 @@ export function SingleUserInvite() {
           {/* Submit */}
           <Button
             type="submit"
-            disabled={!email || createInvitationMutation.isPending}
+            disabled={!email || createInvitationMutation.isPending || (selectedOrgId === '__new__' && !newOrgName.trim())}
             className="w-full md:w-auto"
           >
             {createInvitationMutation.isPending ? (
