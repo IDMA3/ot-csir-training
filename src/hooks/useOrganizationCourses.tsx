@@ -15,21 +15,20 @@ export interface OrganizationCourse {
 }
 
 export function useOrganizationCourses() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   return useQuery({
-    queryKey: ['organization-courses', user?.id],
+    queryKey: ['organization-courses', user?.id, profile?.organization_id],
     queryFn: async () => {
       if (!user) return [];
 
-      // Get user's profile to find organization_id
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
+      // Users without organization cannot see any courses
+      if (!profile?.organization_id) {
+        return [];
+      }
 
-      // Get all active courses
+      // RLS now handles visibility via can_view_course function
+      // Just fetch all active courses - the DB will filter appropriately
       const { data: courses, error: coursesError } = await supabase
         .from('course')
         .select('*')
@@ -37,22 +36,6 @@ export function useOrganizationCourses() {
         .order('title');
 
       if (coursesError) throw coursesError;
-
-      let allowedCourseIds: string[] | null = null;
-
-      // If user has an organization, check for course restrictions
-      if (profile?.organization_id) {
-        const { data: orgCourses } = await supabase
-          .from('organization_courses')
-          .select('course_id')
-          .eq('organization_id', profile.organization_id);
-
-        // If organization has specific course assignments, filter to those
-        if (orgCourses && orgCourses.length > 0) {
-          allowedCourseIds = orgCourses.map(oc => oc.course_id);
-        }
-        // If no assignments, all courses are allowed (null means no restriction)
-      }
 
       // Get modules count per course
       const { data: modules } = await supabase
@@ -74,12 +57,7 @@ export function useOrganizationCourses() {
       const certificateSet = new Set(certificates?.map(c => c.course_id) || []);
       const progressMap = new Map(progress?.map(p => [p.module_id, p.completed]) || []);
 
-      // Filter courses if organization has restrictions
-      const filteredCourses = allowedCourseIds 
-        ? courses?.filter(c => allowedCourseIds!.includes(c.id))
-        : courses;
-
-      return (filteredCourses || []).map(course => {
+      return (courses || []).map(course => {
         const courseModules = modules?.filter(m => m.course_id === course.id) || [];
         const completedModules = courseModules.filter(m => progressMap.get(m.id));
         const moduleCount = courseModules.length;
@@ -105,35 +83,40 @@ export function useOrganizationCourses() {
 }
 
 export function useCanAccessCourse(courseId: string | undefined) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   return useQuery({
-    queryKey: ['can-access-course', user?.id, courseId],
+    queryKey: ['can-access-course', user?.id, courseId, profile?.organization_id],
     queryFn: async () => {
       if (!user || !courseId) return false;
 
-      // Get user's profile to find organization_id
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('organization_id')
-        .eq('id', user.id)
-        .single();
+      // Users without organization cannot access any courses
+      if (!profile?.organization_id) return false;
 
-      // If no organization, allow all courses
-      if (!profile?.organization_id) return true;
+      // Try to fetch the course - RLS will determine if accessible
+      const { data: course, error } = await supabase
+        .from('course')
+        .select('id')
+        .eq('id', courseId)
+        .eq('active', true)
+        .maybeSingle();
 
-      // Check if organization has any course restrictions
-      const { data: orgCourses } = await supabase
-        .from('organization_courses')
-        .select('course_id')
-        .eq('organization_id', profile.organization_id);
+      if (error) {
+        console.error('Error checking course access:', error);
+        return false;
+      }
 
-      // If no restrictions, allow all courses
-      if (!orgCourses || orgCourses.length === 0) return true;
-
-      // Check if course is in allowed list
-      return orgCourses.some(oc => oc.course_id === courseId);
+      return !!course;
     },
     enabled: !!user && !!courseId,
   });
+}
+
+export function useHasOrganization() {
+  const { profile, isLoading } = useAuth();
+  
+  return {
+    hasOrganization: !!profile?.organization_id,
+    isLoading,
+  };
 }

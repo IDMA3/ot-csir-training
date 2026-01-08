@@ -6,22 +6,42 @@ import { CourseGridSkeleton } from '@/components/LoadingSkeleton';
 import { useEnrollments, useEnrollInCourse } from '@/hooks/useCourse';
 import { useOrganizationCourses } from '@/hooks/useOrganizationCourses';
 import { useAuth } from '@/hooks/useAuth';
+import { useRecertificationSchedules, useResetForRecertification, getRecertificationDueDate, getRecertificationStatus } from '@/hooks/useRecertification';
 import { BookOpen, Filter, Search, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Courses() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   const { data: courses = [], isLoading: coursesLoading } = useOrganizationCourses();
   const { data: enrollments = [] } = useEnrollments();
+  const { data: schedules = [] } = useRecertificationSchedules(profile?.organization_id ?? undefined);
   const enrollMutation = useEnrollInCourse();
+  const resetMutation = useResetForRecertification();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 300);
+
+  // Fetch user's certificates for recertification calculation
+  const { data: certificates = [] } = useQuery({
+    queryKey: ['user-certificates', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from('certificates')
+        .select('course_id, issued_at')
+        .eq('user_id', user.id)
+        .order('issued_at', { ascending: false });
+      return data || [];
+    },
+    enabled: !!user,
+  });
 
   const handleEnroll = async (courseId: string) => {
     try {
@@ -33,6 +53,22 @@ export default function Courses() {
     } catch {
       toast({
         title: "Enrollment failed",
+        description: "Please try again later.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRecertify = async (courseId: string) => {
+    try {
+      await resetMutation.mutateAsync(courseId);
+      toast({
+        title: "Ready for recertification",
+        description: "Your progress has been reset. Complete the course again to recertify.",
+      });
+    } catch {
+      toast({
+        title: "Recertification failed",
         description: "Please try again later.",
         variant: "destructive",
       });
@@ -191,6 +227,21 @@ export default function Courses() {
               const enrollment = enrollments.find(e => e.course_id === course.id);
               const isEnrolled = !!enrollment;
               
+              // Calculate recertification status
+              const schedule = schedules.find(s => s.course_id === course.id);
+              const certificate = certificates.find(c => c.course_id === course.id);
+              let recertStatus = undefined;
+              let recertDueDate = undefined;
+              
+              if (schedule && certificate) {
+                recertDueDate = getRecertificationDueDate(
+                  new Date(certificate.issued_at),
+                  schedule.schedule_type,
+                  schedule.custom_days
+                );
+                recertStatus = getRecertificationStatus(recertDueDate);
+              }
+              
               return (
                 <CourseCard
                   key={course.id}
@@ -204,6 +255,9 @@ export default function Courses() {
                   hasCertificate={course.has_certificate}
                   isEnrolled={isEnrolled}
                   onEnroll={() => handleEnroll(course.id)}
+                  recertificationStatus={recertStatus}
+                  recertificationDueDate={recertDueDate}
+                  onRecertify={() => handleRecertify(course.id)}
                 />
               );
             })}

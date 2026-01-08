@@ -3,7 +3,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Clock, Award, CheckCircle, Eye, ArrowRight } from 'lucide-react';
+import { BookOpen, Clock, Award, CheckCircle, Eye, ArrowRight, RefreshCw, AlertTriangle } from 'lucide-react';
+import { format } from 'date-fns';
+import { RecertificationStatus } from '@/hooks/useRecertification';
 
 interface CourseCardProps {
   id: string;
@@ -16,6 +18,9 @@ interface CourseCardProps {
   hasCertificate: boolean;
   isEnrolled: boolean;
   onEnroll?: () => void;
+  recertificationStatus?: RecertificationStatus;
+  recertificationDueDate?: Date | null;
+  onRecertify?: () => void;
 }
 
 export function CourseCard({
@@ -29,8 +34,40 @@ export function CourseCard({
   hasCertificate,
   isEnrolled,
   onEnroll,
+  recertificationStatus,
+  recertificationDueDate,
+  onRecertify,
 }: CourseCardProps) {
   const isComplete = progressPercentage === 100;
+  const needsRecertification = recertificationStatus === 'due' || recertificationStatus === 'overdue';
+
+  const getRecertificationBadge = () => {
+    if (!recertificationStatus || recertificationStatus === 'none' || recertificationStatus === 'current') {
+      return null;
+    }
+
+    const variants: Record<RecertificationStatus, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
+      upcoming: { variant: 'secondary', label: 'Recert Soon' },
+      due: { variant: 'default', label: 'Recert Due' },
+      overdue: { variant: 'destructive', label: 'Overdue' },
+      current: { variant: 'outline', label: '' },
+      none: { variant: 'outline', label: '' },
+    };
+
+    const { variant, label } = variants[recertificationStatus];
+    if (!label) return null;
+
+    return (
+      <Badge variant={variant} className="flex items-center gap-1 shrink-0">
+        {recertificationStatus === 'overdue' ? (
+          <AlertTriangle className="h-3 w-3" />
+        ) : (
+          <RefreshCw className="h-3 w-3" />
+        )}
+        {label}
+      </Badge>
+    );
+  };
 
   return (
     <Card className="flex flex-col h-full transition-shadow hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
@@ -50,6 +87,7 @@ export function CourseCard({
               Certified
             </Badge>
           )}
+          {getRecertificationBadge()}
         </div>
         {description && (
           <CardDescription className="line-clamp-2">{description}</CardDescription>
@@ -76,9 +114,26 @@ export function CourseCard({
             <Progress value={progressPercentage} className="h-2" aria-label={`Course progress: ${progressPercentage}%`} />
           </div>
         )}
+
+        {recertificationDueDate && recertificationStatus !== 'none' && (
+          <div className="mt-3 text-xs text-muted-foreground">
+            {recertificationStatus === 'overdue' ? (
+              <span className="text-destructive">Was due {format(recertificationDueDate, 'MMM d, yyyy')}</span>
+            ) : recertificationStatus === 'due' ? (
+              <span className="text-warning">Due now</span>
+            ) : recertificationStatus === 'upcoming' ? (
+              <span>Due {format(recertificationDueDate, 'MMM d, yyyy')}</span>
+            ) : null}
+          </div>
+        )}
       </CardContent>
       <CardFooter className="gap-2">
-        {isEnrolled ? (
+        {needsRecertification && onRecertify ? (
+          <Button onClick={onRecertify} className="flex-1 focus-ring" variant="destructive">
+            <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+            Recertify Now
+          </Button>
+        ) : isEnrolled ? (
           <>
             <Button asChild className="flex-1 focus-ring">
               <Link to={`/courses/${id}`}>
