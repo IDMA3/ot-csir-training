@@ -9,8 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2, Download, Upload, FileJson, FileSpreadsheet } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2, Download, Upload, FileJson, FileSpreadsheet, FileDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Question {
@@ -308,6 +308,81 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
     toast.success(`Exported ${questions.length} questions to CSV`);
   };
 
+  // Download template functions
+  const downloadJSONTemplate = () => {
+    const template = [
+      {
+        prompt: "What is the primary purpose of network segmentation in OT environments?",
+        choices: {
+          A: "To increase network speed",
+          B: "To isolate critical systems and limit attack surface",
+          C: "To reduce hardware costs",
+          D: "To simplify network management"
+        },
+        correct_choice: "B",
+        rationale: "Network segmentation isolates critical operational technology systems from less secure networks, limiting the potential impact of a security breach."
+      },
+      {
+        prompt: "Which of the following is a key principle of defense in depth?",
+        choices: {
+          A: "Relying on a single strong firewall",
+          B: "Using multiple layers of security controls",
+          C: "Minimizing security to improve performance",
+          D: "Trusting all internal network traffic"
+        },
+        correct_choice: "B",
+        rationale: "Defense in depth involves implementing multiple layers of security controls so that if one layer fails, others continue to provide protection."
+      }
+    ];
+    
+    const blob = new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'questions-template.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('JSON template downloaded');
+  };
+
+  const downloadCSVTemplate = () => {
+    const headers = ['prompt', 'choice_a', 'choice_b', 'choice_c', 'choice_d', 'correct_choice', 'rationale'];
+    const sampleRows = [
+      [
+        'What is the primary purpose of network segmentation in OT environments?',
+        'To increase network speed',
+        'To isolate critical systems and limit attack surface',
+        'To reduce hardware costs',
+        'To simplify network management',
+        'B',
+        'Network segmentation isolates critical operational technology systems from less secure networks.'
+      ],
+      [
+        'Which of the following is a key principle of defense in depth?',
+        'Relying on a single strong firewall',
+        'Using multiple layers of security controls',
+        'Minimizing security to improve performance',
+        'Trusting all internal network traffic',
+        'B',
+        'Defense in depth involves implementing multiple layers of security controls.'
+      ]
+    ];
+
+    const csvContent = [
+      headers.join(','),
+      ...sampleRows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'questions-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success('CSV template downloaded');
+  };
+
   // Import functions
   const bulkImportMutation = useMutation({
     mutationFn: async (questionsToImport: Array<{
@@ -527,6 +602,15 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
                 <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
                   <FileSpreadsheet className="h-4 w-4 mr-2" />
                   Import from CSV
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={downloadJSONTemplate}>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Download JSON Template
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={downloadCSVTemplate}>
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Download CSV Template
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
