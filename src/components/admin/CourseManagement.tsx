@@ -10,14 +10,25 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Pencil, BookOpen, Loader2, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleEditor } from './ModuleEditor';
+
+const COURSE_CATEGORIES = [
+  'Security',
+  'Compliance',
+  'Technical',
+  'Management',
+  'Foundations',
+  'Other',
+] as const;
 
 interface Course {
   id: string;
   title: string;
   description: string | null;
+  category: string | null;
   duration_minutes: number;
   version: string;
   active: boolean;
@@ -32,6 +43,7 @@ export function CourseManagement() {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
+    category: '',
     duration_minutes: 15,
     version: '1.0',
     active: true,
@@ -54,6 +66,7 @@ export function CourseManagement() {
       const { error } = await supabase.from('course').insert({
         title: data.title,
         description: data.description || null,
+        category: data.category || null,
         duration_minutes: data.duration_minutes,
         version: data.version,
         active: data.active,
@@ -77,6 +90,7 @@ export function CourseManagement() {
         .update({
           title: data.title,
           description: data.description || null,
+          category: data.category || null,
           duration_minutes: data.duration_minutes,
           version: data.version,
           active: data.active,
@@ -98,6 +112,7 @@ export function CourseManagement() {
     setFormData({
       title: '',
       description: '',
+      category: '',
       duration_minutes: 15,
       version: '1.0',
       active: true,
@@ -111,6 +126,7 @@ export function CourseManagement() {
     setFormData({
       title: course.title,
       description: course.description || '',
+      category: course.category || '',
       duration_minutes: course.duration_minutes,
       version: course.version,
       active: course.active,
@@ -190,6 +206,22 @@ export function CourseManagement() {
                       rows={3}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="category">Category</Label>
+                    <Select 
+                      value={formData.category} 
+                      onValueChange={(value) => setFormData({ ...formData, category: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COURSE_CATEGORIES.map((cat) => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="duration">Duration (minutes)</Label>
@@ -248,6 +280,7 @@ export function CourseManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>Course</TableHead>
+                <TableHead>Category</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Version</TableHead>
                 <TableHead>Status</TableHead>
@@ -264,6 +297,13 @@ export function CourseManagement() {
                         <p className="text-sm text-muted-foreground line-clamp-1">{course.description}</p>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {course.category ? (
+                      <Badge variant="outline">{course.category}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
                   </TableCell>
                   <TableCell>{course.duration_minutes} min</TableCell>
                   <TableCell>{course.version}</TableCell>

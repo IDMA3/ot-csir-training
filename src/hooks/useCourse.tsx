@@ -9,12 +9,14 @@ export interface Course {
   duration_minutes: number;
   version: string;
   active: boolean;
+  category: string | null;
 }
 
 export interface CourseWithProgress extends Course {
   module_count: number;
   progress_percentage: number;
   has_certificate: boolean;
+  category: string | null;
 }
 
 export interface Module {
