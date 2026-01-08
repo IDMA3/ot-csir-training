@@ -7,7 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Toggle } from '@/components/ui/toggle';
 import { Separator } from '@/components/ui/separator';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   Bold, 
   Italic, 
@@ -25,8 +28,11 @@ import {
   Redo,
   Code,
   Minus,
+  Upload,
+  Loader2,
 } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { toast } from 'sonner';
 
 interface RichTextEditorProps {
   content: string;
@@ -37,6 +43,9 @@ interface RichTextEditorProps {
 export function RichTextEditor({ content, onChange, placeholder }: RichTextEditorProps) {
   const [linkUrl, setLinkUrl] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [imagePopoverOpen, setImagePopoverOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -91,10 +100,66 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
     editor.chain().focus().unsetLink().run();
   };
 
-  const addImage = () => {
+  const addImageFromUrl = () => {
     if (imageUrl) {
       editor.chain().focus().setImage({ src: imageUrl }).run();
       setImageUrl('');
+      setImagePopoverOpen(false);
+    }
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image must be less than 5MB');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // Generate unique filename
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+      const filePath = `uploads/${fileName}`;
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('module-images')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('module-images')
+        .getPublicUrl(filePath);
+
+      // Insert image into editor
+      editor.chain().focus().setImage({ src: publicUrl }).run();
+      
+      toast.success('Image uploaded successfully');
+      setImagePopoverOpen(false);
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast.error('Failed to upload image');
+    } finally {
+      setIsUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -253,24 +318,62 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
         </Popover>
 
         {/* Image */}
-        <Popover>
+        <Popover open={imagePopoverOpen} onOpenChange={setImagePopoverOpen}>
           <PopoverTrigger asChild>
             <Button type="button" variant="ghost" size="sm">
               <ImageIcon className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-80" align="start">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <p className="text-sm font-medium">Insert Image</p>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="https://example.com/image.jpg"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addImage()}
-                />
-                <Button type="button" size="sm" onClick={addImage}>Add</Button>
-              </div>
+              <Tabs defaultValue="upload" className="w-full">
+                <TabsList className="w-full">
+                  <TabsTrigger value="upload" className="flex-1">
+                    <Upload className="h-3 w-3 mr-1" />
+                    Upload
+                  </TabsTrigger>
+                  <TabsTrigger value="url" className="flex-1">
+                    <LinkIcon className="h-3 w-3 mr-1" />
+                    URL
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="upload" className="space-y-2 mt-2">
+                  <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="image-upload" className="text-xs text-muted-foreground">
+                      Max 5MB, JPG/PNG/GIF/WebP
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="image-upload"
+                        type="file"
+                        accept="image/*"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        disabled={isUploading}
+                        className="flex-1"
+                      />
+                    </div>
+                    {isUploading && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Uploading...
+                      </div>
+                    )}
+                  </div>
+                </TabsContent>
+                <TabsContent value="url" className="space-y-2 mt-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="https://example.com/image.jpg"
+                      value={imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addImageFromUrl()}
+                    />
+                    <Button type="button" size="sm" onClick={addImageFromUrl}>Add</Button>
+                  </div>
+                </TabsContent>
+              </Tabs>
             </div>
           </PopoverContent>
         </Popover>
