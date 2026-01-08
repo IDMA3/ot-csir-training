@@ -1,13 +1,31 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subDays, startOfDay, endOfDay, differenceInDays, differenceInHours } from 'date-fns';
-import { Loader2, TrendingUp, Clock, Target, Users, Award, BookOpen } from 'lucide-react';
+import { format, subDays, startOfDay, endOfDay, differenceInHours, eachDayOfInterval } from 'date-fns';
+import { Loader2, TrendingUp, Clock, Target, Users, Award, BookOpen, CalendarIcon, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { DateRange } from 'react-day-picker';
+
+const PRESET_RANGES = [
+  { label: 'Last 7 days', days: 7 },
+  { label: 'Last 30 days', days: 30 },
+  { label: 'Last 90 days', days: 90 },
+  { label: 'All time', days: null },
+];
 
 export function AnalyticsDashboard() {
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: subDays(new Date(), 30),
+    to: new Date(),
+  });
+  const [activePreset, setActivePreset] = useState<number | null>(30);
+
   // Fetch analytics data
   const { data: analyticsData, isLoading } = useQuery({
     queryKey: ['admin-analytics'],
@@ -33,20 +51,50 @@ export function AnalyticsDashboard() {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Filter data by date range
+  const filteredData = useMemo(() => {
+    if (!analyticsData) return null;
+    
+    const startDate = dateRange?.from ? startOfDay(dateRange.from) : null;
+    const endDate = dateRange?.to ? endOfDay(dateRange.to) : null;
+
+    const filterByDate = <T extends { [key: string]: any }>(items: T[], dateField: string): T[] => {
+      if (!startDate && !endDate) return items;
+      return items.filter(item => {
+        const itemDate = item[dateField] ? new Date(item[dateField]) : null;
+        if (!itemDate) return false;
+        if (startDate && itemDate < startDate) return false;
+        if (endDate && itemDate > endDate) return false;
+        return true;
+      });
+    };
+
+    return {
+      courses: analyticsData.courses,
+      modules: analyticsData.modules,
+      enrollments: filterByDate(analyticsData.enrollments, 'enrolled_at'),
+      progress: filterByDate(analyticsData.progress.filter(p => p.completed), 'completed_at'),
+      attempts: filterByDate(analyticsData.attempts, 'submitted_at'),
+      certificates: filterByDate(analyticsData.certificates, 'issued_at'),
+      // Keep original for time-to-completion calculation
+      allEnrollments: analyticsData.enrollments,
+    };
+  }, [analyticsData, dateRange]);
+
   // KPI Metrics
   const kpiMetrics = useMemo(() => {
-    if (!analyticsData) return null;
+    if (!filteredData) return null;
 
     // Average exam score
-    const examAttempts = analyticsData.attempts.filter(a => a.score !== null);
+    const examAttempts = filteredData.attempts.filter(a => a.score !== null);
     const avgScore = examAttempts.length > 0
       ? examAttempts.reduce((sum, a) => sum + Number(a.score), 0) / examAttempts.length
       : 0;
 
     // Time to completion (enrollment to certificate)
     const completionTimes: number[] = [];
-    analyticsData.certificates.forEach(cert => {
-      const enrollment = analyticsData.enrollments.find(
+    filteredData.certificates.forEach(cert => {
+      const enrollment = filteredData.allEnrollments.find(
         e => e.user_id === cert.user_id && e.course_id === cert.course_id
       );
       if (enrollment) {
@@ -58,27 +106,22 @@ export function AnalyticsDashboard() {
       ? completionTimes.reduce((sum, h) => sum + h, 0) / completionTimes.length
       : 0;
 
-    // Completion rate
-    const uniqueEnrollments = new Set(analyticsData.enrollments.map(e => `${e.user_id}-${e.course_id}`)).size;
-    const completedCourses = analyticsData.certificates.length;
+    // Completion rate (within filtered period)
+    const uniqueEnrollments = new Set(filteredData.enrollments.map(e => `${e.user_id}-${e.course_id}`)).size;
+    const completedCourses = filteredData.certificates.length;
     const completionRate = uniqueEnrollments > 0 ? (completedCourses / uniqueEnrollments) * 100 : 0;
 
-    // Active learners (enrolled in last 7 days)
-    const sevenDaysAgo = subDays(new Date(), 7);
-    const activeLearners = new Set(
-      analyticsData.enrollments
-        .filter(e => new Date(e.enrolled_at) >= sevenDaysAgo)
-        .map(e => e.user_id)
-    ).size;
+    // Active learners (in date range)
+    const activeLearners = new Set(filteredData.enrollments.map(e => e.user_id)).size;
 
     // Pass rate
-    const passRate = analyticsData.attempts.length > 0
-      ? (analyticsData.attempts.filter(a => a.passed).length / analyticsData.attempts.length) * 100
+    const passRate = filteredData.attempts.length > 0
+      ? (filteredData.attempts.filter(a => a.passed).length / filteredData.attempts.length) * 100
       : 0;
 
     // Modules completed per user (engagement)
     const userModuleCompletions = new Map<string, number>();
-    analyticsData.progress.filter(p => p.completed).forEach(p => {
+    filteredData.progress.forEach(p => {
       const count = userModuleCompletions.get(p.user_id) || 0;
       userModuleCompletions.set(p.user_id, count + 1);
     });
@@ -93,19 +136,19 @@ export function AnalyticsDashboard() {
       activeLearners,
       passRate,
       avgModulesPerUser,
-      totalAttempts: analyticsData.attempts.length,
-      totalCertificates: analyticsData.certificates.length,
+      totalAttempts: filteredData.attempts.length,
+      totalCertificates: filteredData.certificates.length,
     };
-  }, [analyticsData]);
+  }, [filteredData]);
 
   // Enrollments by course
   const enrollmentsByCourseData = useMemo(() => {
-    if (!analyticsData) return [];
+    if (!filteredData) return [];
     
     const courseMap = new Map<string, { name: string; count: number }>();
-    analyticsData.courses.forEach(c => courseMap.set(c.id, { name: c.title, count: 0 }));
+    filteredData.courses.forEach(c => courseMap.set(c.id, { name: c.title, count: 0 }));
     
-    analyticsData.enrollments.forEach(e => {
+    filteredData.enrollments.forEach(e => {
       const course = courseMap.get(e.course_id);
       if (course) course.count++;
     });
@@ -114,11 +157,11 @@ export function AnalyticsDashboard() {
       .filter(c => c.count > 0)
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
-  }, [analyticsData]);
+  }, [filteredData]);
 
   // Score distribution
   const scoreDistribution = useMemo(() => {
-    if (!analyticsData) return [];
+    if (!filteredData) return [];
     
     const ranges = [
       { range: '0-59%', min: 0, max: 59, count: 0, fill: 'hsl(var(--destructive))' },
@@ -128,21 +171,21 @@ export function AnalyticsDashboard() {
       { range: '90-100%', min: 90, max: 100, count: 0, fill: 'hsl(var(--success))' },
     ];
 
-    analyticsData.attempts.forEach(a => {
+    filteredData.attempts.forEach(a => {
       const score = Number(a.score);
       const bucket = ranges.find(r => score >= r.min && score <= r.max);
       if (bucket) bucket.count++;
     });
 
     return ranges;
-  }, [analyticsData]);
+  }, [filteredData]);
 
   // Pass/Fail rates
   const passFailData = useMemo(() => {
-    if (!analyticsData) return [];
+    if (!filteredData) return [];
     
-    const passed = analyticsData.attempts.filter(a => a.passed).length;
-    const failed = analyticsData.attempts.filter(a => !a.passed).length;
+    const passed = filteredData.attempts.filter(a => a.passed).length;
+    const failed = filteredData.attempts.filter(a => !a.passed).length;
     
     if (passed === 0 && failed === 0) return [];
     
@@ -150,57 +193,71 @@ export function AnalyticsDashboard() {
       { name: 'Passed', value: passed, fill: 'hsl(var(--success))' },
       { name: 'Failed', value: failed, fill: 'hsl(var(--destructive))' },
     ];
-  }, [analyticsData]);
+  }, [filteredData]);
 
-  // Completions over time (last 30 days)
+  // Completions over time (based on date range)
   const completionsOverTime = useMemo(() => {
-    if (!analyticsData) return [];
+    if (!filteredData || !dateRange?.from || !dateRange?.to) return [];
 
-    const last30Days = Array.from({ length: 30 }, (_, i) => {
-      const date = subDays(new Date(), 29 - i);
-      return {
-        date: format(date, 'MMM d'),
-        fullDate: date,
-        completions: 0,
-        enrollments: 0,
-        certificates: 0,
-      };
+    const days = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
+    
+    const timelineData = days.map(date => ({
+      date: format(date, 'MMM d'),
+      fullDate: date,
+      completions: 0,
+      enrollments: 0,
+      certificates: 0,
+    }));
+
+    filteredData.progress.forEach(p => {
+      if (!p.completed_at) return;
+      const completedDate = new Date(p.completed_at);
+      const dayIndex = timelineData.findIndex(d => 
+        completedDate >= startOfDay(d.fullDate) && completedDate <= endOfDay(d.fullDate)
+      );
+      if (dayIndex >= 0) {
+        timelineData[dayIndex].completions++;
+      }
     });
 
-    analyticsData.progress
-      .filter(p => p.completed && p.completed_at)
-      .forEach(p => {
-        const completedDate = new Date(p.completed_at!);
-        const dayIndex = last30Days.findIndex(d => 
-          completedDate >= startOfDay(d.fullDate) && completedDate <= endOfDay(d.fullDate)
-        );
-        if (dayIndex >= 0) {
-          last30Days[dayIndex].completions++;
-        }
-      });
-
-    analyticsData.enrollments.forEach(e => {
+    filteredData.enrollments.forEach(e => {
       const enrolledDate = new Date(e.enrolled_at);
-      const dayIndex = last30Days.findIndex(d => 
+      const dayIndex = timelineData.findIndex(d => 
         enrolledDate >= startOfDay(d.fullDate) && enrolledDate <= endOfDay(d.fullDate)
       );
       if (dayIndex >= 0) {
-        last30Days[dayIndex].enrollments++;
+        timelineData[dayIndex].enrollments++;
       }
     });
 
-    analyticsData.certificates.forEach(c => {
+    filteredData.certificates.forEach(c => {
       const issuedDate = new Date(c.issued_at);
-      const dayIndex = last30Days.findIndex(d => 
+      const dayIndex = timelineData.findIndex(d => 
         issuedDate >= startOfDay(d.fullDate) && issuedDate <= endOfDay(d.fullDate)
       );
       if (dayIndex >= 0) {
-        last30Days[dayIndex].certificates++;
+        timelineData[dayIndex].certificates++;
       }
     });
 
-    return last30Days;
-  }, [analyticsData]);
+    // If more than 60 days, aggregate to weekly
+    if (days.length > 60) {
+      const weeklyData: typeof timelineData = [];
+      for (let i = 0; i < timelineData.length; i += 7) {
+        const week = timelineData.slice(i, i + 7);
+        weeklyData.push({
+          date: format(week[0].fullDate, 'MMM d'),
+          fullDate: week[0].fullDate,
+          completions: week.reduce((sum, d) => sum + d.completions, 0),
+          enrollments: week.reduce((sum, d) => sum + d.enrollments, 0),
+          certificates: week.reduce((sum, d) => sum + d.certificates, 0),
+        });
+      }
+      return weeklyData;
+    }
+
+    return timelineData;
+  }, [filteredData, dateRange]);
 
   const chartConfig = {
     completions: { label: 'Module Completions', color: 'hsl(var(--success))' },
@@ -216,6 +273,28 @@ export function AnalyticsDashboard() {
     return `${(hours / 24).toFixed(1)}d`;
   };
 
+  const handlePresetClick = (days: number | null) => {
+    setActivePreset(days);
+    if (days === null) {
+      setDateRange(undefined);
+    } else {
+      setDateRange({
+        from: subDays(new Date(), days),
+        to: new Date(),
+      });
+    }
+  };
+
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    setDateRange(range);
+    setActivePreset(null);
+  };
+
+  const clearDateRange = () => {
+    setDateRange(undefined);
+    setActivePreset(null);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -226,9 +305,65 @@ export function AnalyticsDashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold text-foreground">Analytics Overview</h2>
-        <p className="text-muted-foreground">Training platform performance metrics</p>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Analytics Overview</h2>
+          <p className="text-muted-foreground">Training platform performance metrics</p>
+        </div>
+
+        {/* Date Range Filter */}
+        <div className="flex flex-wrap items-center gap-2">
+          {PRESET_RANGES.map((preset) => (
+            <Button
+              key={preset.label}
+              variant={activePreset === preset.days ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => handlePresetClick(preset.days)}
+            >
+              {preset.label}
+            </Button>
+          ))}
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={activePreset === null && dateRange ? 'default' : 'outline'}
+                size="sm"
+                className={cn('gap-2', activePreset === null && dateRange && 'pr-2')}
+              >
+                <CalendarIcon className="h-4 w-4" />
+                {activePreset === null && dateRange?.from ? (
+                  dateRange.to ? (
+                    <>
+                      {format(dateRange.from, 'MMM d')} - {format(dateRange.to, 'MMM d')}
+                    </>
+                  ) : (
+                    format(dateRange.from, 'MMM d, yyyy')
+                  )
+                ) : (
+                  'Custom'
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                initialFocus
+                mode="range"
+                defaultMonth={dateRange?.from}
+                selected={dateRange}
+                onSelect={handleDateRangeChange}
+                numberOfMonths={2}
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+
+          {(dateRange || activePreset !== null) && (
+            <Button variant="ghost" size="sm" onClick={clearDateRange}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -267,7 +402,7 @@ export function AnalyticsDashboard() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
               <Users className="h-4 w-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Active (7d)</span>
+              <span className="text-sm text-muted-foreground">Learners</span>
             </div>
             <p className="text-2xl font-bold mt-2">{kpiMetrics?.activeLearners}</p>
           </CardContent>
@@ -388,16 +523,16 @@ export function AnalyticsDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Certificates Issued</CardTitle>
-            <CardDescription>{kpiMetrics?.totalCertificates} total certificates</CardDescription>
+            <CardDescription>{kpiMetrics?.totalCertificates} certificates in period</CardDescription>
           </CardHeader>
           <CardContent>
-            {analyticsData?.certificates.length === 0 ? (
-              <p className="text-muted-foreground text-center py-8">No certificates issued yet</p>
+            {filteredData?.certificates.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No certificates issued in this period</p>
             ) : (
               <div className="space-y-4 py-4">
-                {analyticsData?.courses.map(course => {
-                  const count = analyticsData.certificates.filter(c => c.course_id === course.id).length;
-                  const enrollmentCount = analyticsData.enrollments.filter(e => e.course_id === course.id).length;
+                {filteredData?.courses.map(course => {
+                  const count = filteredData.certificates.filter(c => c.course_id === course.id).length;
+                  const enrollmentCount = filteredData.enrollments.filter(e => e.course_id === course.id).length;
                   const rate = enrollmentCount > 0 ? (count / enrollmentCount) * 100 : 0;
                   if (count === 0) return null;
                   return (
@@ -424,7 +559,7 @@ export function AnalyticsDashboard() {
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Activity Over Time</CardTitle>
-            <CardDescription>Enrollments, completions, and certificates in the last 30 days</CardDescription>
+            <CardDescription>Enrollments, completions, and certificates in selected period</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[300px]">
