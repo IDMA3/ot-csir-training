@@ -311,6 +311,7 @@ export type Database = {
           job_role: string | null
           last_name: string
           organization: string | null
+          organization_id: string | null
         }
         Insert: {
           created_at?: string
@@ -319,6 +320,7 @@ export type Database = {
           job_role?: string | null
           last_name: string
           organization?: string | null
+          organization_id?: string | null
         }
         Update: {
           created_at?: string
@@ -327,8 +329,17 @@ export type Database = {
           job_role?: string | null
           last_name?: string
           organization?: string | null
+          organization_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       progress: {
         Row: {
@@ -402,6 +413,62 @@ export type Database = {
             columns: ["module_id"]
             isOneToOne: false
             referencedRelation: "modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_invitations: {
+        Row: {
+          accepted_at: string | null
+          course_ids: string[] | null
+          created_at: string
+          email: string
+          expires_at: string
+          first_name: string | null
+          id: string
+          invited_by: string | null
+          job_role: string | null
+          last_name: string | null
+          organization_id: string | null
+          status: string
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          course_ids?: string[] | null
+          created_at?: string
+          email: string
+          expires_at?: string
+          first_name?: string | null
+          id?: string
+          invited_by?: string | null
+          job_role?: string | null
+          last_name?: string | null
+          organization_id?: string | null
+          status?: string
+          token?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          course_ids?: string[] | null
+          created_at?: string
+          email?: string
+          expires_at?: string
+          first_name?: string | null
+          id?: string
+          invited_by?: string | null
+          job_role?: string | null
+          last_name?: string | null
+          organization_id?: string | null
+          status?: string
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_invitations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
