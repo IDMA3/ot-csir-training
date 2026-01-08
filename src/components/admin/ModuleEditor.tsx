@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, GripVertical, Loader2, ArrowLeft, FileText, ClipboardList } from 'lucide-react';
+import { Plus, Pencil, Trash2, GripVertical, Loader2, ArrowLeft, FileText, ClipboardList, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Module {
@@ -117,6 +117,31 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete module: ${error.message}`);
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (module: Module) => {
+      const nextSequence = modules.length > 0 
+        ? Math.max(...modules.map(m => m.sequence)) + 1 
+        : 1;
+      
+      const { error } = await supabase.from('modules').insert({
+        course_id: courseId,
+        title: `${module.title} (Copy)`,
+        body_html: module.body_html,
+        type: module.type,
+        sequence: nextSequence,
+        estimated_minutes: module.estimated_minutes,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-modules', courseId] });
+      toast.success('Module duplicated successfully');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to duplicate module: ${error.message}`);
     },
   });
 
@@ -401,7 +426,16 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
                   <TableCell>{module.estimated_minutes} min</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(module)}>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => duplicateMutation.mutate(module)}
+                        disabled={duplicateMutation.isPending}
+                        title="Duplicate module"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(module)} title="Edit module">
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button 
@@ -409,6 +443,7 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
                         size="sm" 
                         onClick={() => handleDelete(module)}
                         disabled={deleteMutation.isPending}
+                        title="Delete module"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
