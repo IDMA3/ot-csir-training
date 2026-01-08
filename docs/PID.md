@@ -137,9 +137,28 @@ VITE_SUPABASE_PROJECT_ID=<auto-configured>
 ```
 
 ### Deployment Environments
-- **Lovable.dev**: Variables auto-injected
-- **GitHub/Self-hosted**: Requires manual `.env` configuration
-- **Production**: Must add domain to auth redirect URLs
+
+| Platform | Configuration | Notes |
+|----------|--------------|-------|
+| **Lovable.dev** | Auto-configured | Click Publish to deploy |
+| **GitHub Pages** | GitHub Secrets required | See [DEPLOYMENT.md](./DEPLOYMENT.md) |
+| **Self-hosted** | Manual `.env` file | Standard Vite deployment |
+
+### GitHub Pages Setup
+
+The application is pre-configured for GitHub Pages deployment at `/ot-csir-training/`:
+
+1. **Secrets Required**: `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` as repository secrets
+2. **Pages Source**: Must be set to "GitHub Actions" (not branch-based)
+3. **Auth URLs**: Add `https://[username].github.io/ot-csir-training/` to Supabase redirect URLs
+
+Key configuration files:
+- `.github/workflows/deploy.yml` - GitHub Actions workflow
+- `vite.config.ts` - Base path set for subdirectory hosting
+- `public/404.html` - SPA routing fallback
+- `index.html` - Relative script paths for asset loading
+
+For detailed instructions, see [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ---
 
