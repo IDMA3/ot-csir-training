@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2, Download, Upload, FileJson, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface Question {
@@ -35,6 +35,8 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     prompt: '',
     choices: { A: '', B: '', C: '', D: '' } as Record<string, string>,
@@ -257,6 +259,224 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
     }
   };
 
+  // Export functions
+  const exportToJSON = () => {
+    const exportData = questions.map(q => ({
+      prompt: q.prompt,
+      choices: q.choices,
+      correct_choice: q.correct_choice,
+      rationale: q.rationale || '',
+    }));
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `questions-${moduleTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${questions.length} questions to JSON`);
+  };
+
+  const exportToCSV = () => {
+    // Create CSV with columns: prompt, choice_a, choice_b, choice_c, choice_d, choice_e, choice_f, correct_choice, rationale
+    const headers = ['prompt', 'choice_a', 'choice_b', 'choice_c', 'choice_d', 'choice_e', 'choice_f', 'correct_choice', 'rationale'];
+    
+    const rows = questions.map(q => {
+      const choices = q.choices as Record<string, string>;
+      return [
+        q.prompt,
+        choices.A || '',
+        choices.B || '',
+        choices.C || '',
+        choices.D || '',
+        choices.E || '',
+        choices.F || '',
+        q.correct_choice,
+        q.rationale || '',
+      ].map(cell => `"${String(cell).replace(/"/g, '""')}"`);
+    });
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `questions-${moduleTitle.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${questions.length} questions to CSV`);
+  };
+
+  // Import functions
+  const bulkImportMutation = useMutation({
+    mutationFn: async (questionsToImport: Array<{
+      prompt: string;
+      choices: Record<string, string>;
+      correct_choice: string;
+      rationale: string | null;
+    }>) => {
+      const insertData = questionsToImport.map(q => ({
+        module_id: moduleId,
+        prompt: q.prompt,
+        choices: q.choices,
+        correct_choice: q.correct_choice,
+        rationale: q.rationale,
+      }));
+
+      const { error } = await supabase.from('questions').insert(insertData);
+      if (error) throw error;
+      return insertData.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions', moduleId] });
+      toast.success(`Imported ${count} questions successfully`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to import questions: ${error.message}`);
+    },
+  });
+
+  const handleFileImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+
+    try {
+      const text = await file.text();
+      let questionsToImport: Array<{
+        prompt: string;
+        choices: Record<string, string>;
+        correct_choice: string;
+        rationale: string | null;
+      }> = [];
+
+      if (file.name.endsWith('.json')) {
+        // Parse JSON
+        const parsed = JSON.parse(text);
+        if (!Array.isArray(parsed)) {
+          throw new Error('JSON must be an array of questions');
+        }
+        
+        questionsToImport = parsed.map((item: any, index: number) => {
+          if (!item.prompt) {
+            throw new Error(`Question ${index + 1} is missing a prompt`);
+          }
+          if (!item.choices || typeof item.choices !== 'object') {
+            throw new Error(`Question ${index + 1} is missing choices`);
+          }
+          if (!item.correct_choice) {
+            throw new Error(`Question ${index + 1} is missing correct_choice`);
+          }
+          
+          return {
+            prompt: String(item.prompt),
+            choices: item.choices,
+            correct_choice: String(item.correct_choice).toUpperCase(),
+            rationale: item.rationale ? String(item.rationale) : null,
+          };
+        });
+      } else if (file.name.endsWith('.csv')) {
+        // Parse CSV
+        const lines = text.split('\n').filter(line => line.trim());
+        if (lines.length < 2) {
+          throw new Error('CSV must have a header row and at least one data row');
+        }
+
+        // Parse header (handle quoted values)
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i++;
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+
+        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase());
+        const promptIndex = headers.findIndex(h => h === 'prompt' || h === 'question');
+        const correctIndex = headers.findIndex(h => h === 'correct_choice' || h === 'correct' || h === 'answer');
+        const rationaleIndex = headers.findIndex(h => h === 'rationale' || h === 'explanation');
+
+        if (promptIndex === -1) {
+          throw new Error('CSV must have a "prompt" or "question" column');
+        }
+        if (correctIndex === -1) {
+          throw new Error('CSV must have a "correct_choice" or "correct" or "answer" column');
+        }
+
+        // Find choice columns
+        const choiceIndices: Record<string, number> = {};
+        CHOICE_LETTERS.forEach(letter => {
+          const idx = headers.findIndex(h => 
+            h === `choice_${letter.toLowerCase()}` || 
+            h === `choice${letter.toLowerCase()}` ||
+            h === letter.toLowerCase()
+          );
+          if (idx !== -1) {
+            choiceIndices[letter] = idx;
+          }
+        });
+
+        for (let i = 1; i < lines.length; i++) {
+          const values = parseCSVLine(lines[i]);
+          if (values.length < 2) continue;
+
+          const choices: Record<string, string> = {};
+          Object.entries(choiceIndices).forEach(([letter, idx]) => {
+            if (values[idx]?.trim()) {
+              choices[letter] = values[idx].trim();
+            }
+          });
+
+          if (Object.keys(choices).length < 2) {
+            throw new Error(`Row ${i + 1} must have at least 2 choices`);
+          }
+
+          questionsToImport.push({
+            prompt: values[promptIndex] || '',
+            choices,
+            correct_choice: (values[correctIndex] || 'A').toUpperCase(),
+            rationale: rationaleIndex !== -1 ? values[rationaleIndex] || null : null,
+          });
+        }
+      } else {
+        throw new Error('Please upload a .json or .csv file');
+      }
+
+      if (questionsToImport.length === 0) {
+        throw new Error('No valid questions found in file');
+      }
+
+      await bulkImportMutation.mutateAsync(questionsToImport);
+    } catch (error) {
+      console.error('Import error:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to import questions');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-8">
@@ -279,12 +499,62 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
             <CardTitle>Questions for: {moduleTitle}</CardTitle>
             <CardDescription>Create and manage quiz questions with multiple choice answers</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" />
-              New Question
-            </Button>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center gap-2">
+            {/* Import/Export */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileImport}
+              accept=".json,.csv"
+              className="hidden"
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={isImporting}>
+                  {isImporting ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-2" />
+                  )}
+                  Import
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <FileJson className="h-4 w-4 mr-2" />
+                  Import from JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Import from CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" disabled={questions.length === 0}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={exportToJSON}>
+                  <FileJson className="h-4 w-4 mr-2" />
+                  Export as JSON
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportToCSV}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Export as CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                New Question
+              </Button>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <form onSubmit={handleSubmit}>
                 <DialogHeader>
                   <DialogTitle>{editingQuestion ? 'Edit Question' : 'Create New Question'}</DialogTitle>
@@ -384,6 +654,7 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
