@@ -1,14 +1,20 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, Mail, Clock } from 'lucide-react';
+import { Upload, Mail, Clock, UserPlus, MailOpen } from 'lucide-react';
 import { BulkUserImport } from './BulkUserImport';
 import { UserInvitations } from './UserInvitations';
+import { SingleUserInvite } from './SingleUserInvite';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 
 export function OnboardingCenter() {
-  const [activeTab, setActiveTab] = useState('import');
+  const [activeTab, setActiveTab] = useState('invite');
+  const { isSuperAdmin, canManageUsers } = useAdminPermissions();
+
+  // Check if user has access
+  const canAccess = isSuperAdmin || canManageUsers;
 
   // Fetch invitation stats
   const { data: invitationStats } = useQuery({
@@ -26,7 +32,18 @@ export function OnboardingCenter() {
       
       return { pending, accepted, expired, total: data?.length || 0 };
     },
+    enabled: canAccess,
   });
+
+  if (!canAccess) {
+    return (
+      <Card>
+        <CardContent className="py-8 text-center text-muted-foreground">
+          You don't have permission to manage user onboarding.
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -64,28 +81,43 @@ export function OnboardingCenter() {
         </Card>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content - Tabs */}
       <Card>
         <CardHeader>
           <CardTitle>Add New Users</CardTitle>
-          <CardDescription>Import users via CSV, send email invitations, or manage pending invites</CardDescription>
+          <CardDescription>Invite users individually, import in bulk, or manage pending invitations</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="import" className="gap-2">
-                <Upload className="h-4 w-4" />
-                Import Users
+            <TabsList className={`grid w-full mb-6 ${isSuperAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+              <TabsTrigger value="invite" className="gap-2">
+                <UserPlus className="h-4 w-4" />
+                <span className="hidden sm:inline">Invite User</span>
+                <span className="sm:hidden">Invite</span>
               </TabsTrigger>
+              {isSuperAdmin && (
+                <TabsTrigger value="bulk" className="gap-2">
+                  <Upload className="h-4 w-4" />
+                  <span className="hidden sm:inline">Bulk Import</span>
+                  <span className="sm:hidden">Bulk</span>
+                </TabsTrigger>
+              )}
               <TabsTrigger value="invitations" className="gap-2">
-                <Mail className="h-4 w-4" />
-                Invitations
+                <MailOpen className="h-4 w-4" />
+                <span className="hidden sm:inline">Invitations</span>
+                <span className="sm:hidden">Manage</span>
               </TabsTrigger>
             </TabsList>
             
-            <TabsContent value="import" className="mt-0">
-              <BulkUserImport />
+            <TabsContent value="invite" className="mt-0">
+              <SingleUserInvite />
             </TabsContent>
+            
+            {isSuperAdmin && (
+              <TabsContent value="bulk" className="mt-0">
+                <BulkUserImport />
+              </TabsContent>
+            )}
             
             <TabsContent value="invitations" className="mt-0">
               <UserInvitations />
