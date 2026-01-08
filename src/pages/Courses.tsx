@@ -1,19 +1,37 @@
+import { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { CourseCard } from '@/components/CourseCard';
 import { useCourses, useEnrollments, useEnrollInCourse } from '@/hooks/useCourse';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, BookOpen } from 'lucide-react';
+import { Loader2, BookOpen, Filter } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export default function Courses() {
   const { user } = useAuth();
   const { data: courses = [], isLoading: coursesLoading } = useCourses();
   const { data: enrollments = [] } = useEnrollments();
   const enrollMutation = useEnrollInCourse();
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const handleEnroll = (courseId: string) => {
     enrollMutation.mutate({ courseId });
   };
+
+  // Get unique categories from courses
+  const categories = useMemo(() => {
+    const cats = courses
+      .map(c => c.category)
+      .filter((cat): cat is string => !!cat);
+    return [...new Set(cats)].sort();
+  }, [courses]);
+
+  // Filter courses by selected category
+  const filteredCourses = useMemo(() => {
+    if (!selectedCategory) return courses;
+    return courses.filter(c => c.category === selectedCategory);
+  }, [courses, selectedCategory]);
 
   if (coursesLoading) {
     return (
@@ -34,16 +52,58 @@ export default function Courses() {
           </p>
         </div>
 
-        {courses.length === 0 ? (
+        {/* Category Filter */}
+        {categories.length > 0 && (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filter by category</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={selectedCategory === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(null)}
+              >
+                All
+              </Button>
+              {categories.map(cat => (
+                <Button
+                  key={cat}
+                  variant={selectedCategory === cat ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(cat)}
+                >
+                  {cat}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {filteredCourses.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <BookOpen className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No courses available yet.</p>
+              <p className="text-muted-foreground">
+                {selectedCategory 
+                  ? `No courses found in the "${selectedCategory}" category.`
+                  : 'No courses available yet.'}
+              </p>
+              {selectedCategory && (
+                <Button 
+                  variant="link" 
+                  onClick={() => setSelectedCategory(null)}
+                  className="mt-2"
+                >
+                  View all courses
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course) => {
+            {filteredCourses.map((course) => {
               const enrollment = enrollments.find(e => e.course_id === course.id);
               const isEnrolled = !!enrollment;
               
@@ -53,6 +113,7 @@ export default function Courses() {
                   id={course.id}
                   title={course.title}
                   description={course.description}
+                  category={course.category}
                   durationMinutes={course.duration_minutes}
                   moduleCount={course.module_count}
                   progressPercentage={course.progress_percentage}

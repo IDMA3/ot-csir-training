@@ -9,6 +9,7 @@ interface CourseCardProps {
   id: string;
   title: string;
   description?: string | null;
+  category?: string | null;
   durationMinutes: number;
   moduleCount: number;
   progressPercentage: number;
@@ -21,6 +22,7 @@ export function CourseCard({
   id,
   title,
   description,
+  category,
   durationMinutes,
   moduleCount,
   progressPercentage,
@@ -33,10 +35,17 @@ export function CourseCard({
   return (
     <Card className="flex flex-col h-full">
       <CardHeader>
-        <div className="flex items-start justify-between">
-          <CardTitle className="text-xl">{title}</CardTitle>
+        <div className="flex items-start justify-between gap-2">
+          <div className="space-y-1">
+            <CardTitle className="text-xl">{title}</CardTitle>
+            {category && (
+              <Badge variant="outline" className="text-xs">
+                {category}
+              </Badge>
+            )}
+          </div>
           {hasCertificate && (
-            <Badge variant="secondary" className="flex items-center gap-1">
+            <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
               <Award className="h-3 w-3" />
               Certified
             </Badge>
