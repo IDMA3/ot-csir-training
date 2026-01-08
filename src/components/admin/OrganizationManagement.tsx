@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
@@ -12,7 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Building2, Users, Loader2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Pencil, Trash2, Building2, Users, Loader2, Settings, Upload, X, Palette, BookOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 
@@ -21,27 +23,65 @@ interface Organization {
   name: string;
   description: string | null;
   active: boolean;
+  logo_url: string | null;
+  primary_color: string | null;
+  max_users: number | null;
   created_at: string;
   updated_at: string;
 }
 
 interface OrganizationWithStats extends Organization {
   userCount: number;
+  allowedCourseIds: string[];
+}
+
+interface Course {
+  id: string;
+  title: string;
+}
+
+interface FormData {
+  name: string;
+  description: string;
+  active: boolean;
+  logo_url: string;
+  primary_color: string;
+  max_users: string;
+  allowedCourseIds: string[];
 }
 
 export function OrganizationManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
-  const [formData, setFormData] = useState({
+  const [editingOrg, setEditingOrg] = useState<OrganizationWithStats | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     description: '',
     active: true,
+    logo_url: '',
+    primary_color: '#3b82f6',
+    max_users: '',
+    allowedCourseIds: [],
   });
   
   const { isSuperAdmin } = useAdminPermissions();
   const queryClient = useQueryClient();
 
-  // Fetch organizations with user counts
+  // Fetch courses
+  const { data: courses = [] } = useQuery({
+    queryKey: ['admin-courses-list'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('course')
+        .select('id, title')
+        .order('title');
+      if (error) throw error;
+      return data as Course[];
+    },
+  });
+
+  // Fetch organizations with user counts and allowed courses
   const { data: organizations = [], isLoading } = useQuery({
     queryKey: ['admin-organizations'],
     queryFn: async () => {
@@ -59,6 +99,13 @@ export function OrganizationManagement() {
 
       if (profilesError) throw profilesError;
 
+      // Get organization courses
+      const { data: orgCourses, error: orgCoursesError } = await supabase
+        .from('organization_courses')
+        .select('organization_id, course_id');
+
+      if (orgCoursesError) throw orgCoursesError;
+
       const orgCounts = new Map<string, number>();
       profiles?.forEach(p => {
         if (p.organization) {
@@ -66,22 +113,83 @@ export function OrganizationManagement() {
         }
       });
 
+      const orgCourseMap = new Map<string, string[]>();
+      orgCourses?.forEach(oc => {
+        const existing = orgCourseMap.get(oc.organization_id) || [];
+        existing.push(oc.course_id);
+        orgCourseMap.set(oc.organization_id, existing);
+      });
+
       return orgs.map(org => ({
         ...org,
         userCount: orgCounts.get(org.name) || 0,
+        allowedCourseIds: orgCourseMap.get(org.id) || [],
       })) as OrganizationWithStats[];
     },
   });
 
+  // Handle logo upload
+  const handleLogoUpload = async (file: File) => {
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Image must be less than 2MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${crypto.randomUUID()}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('organization-logos')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('organization-logos')
+        .getPublicUrl(fileName);
+
+      setFormData(prev => ({ ...prev, logo_url: publicUrl }));
+      toast.success('Logo uploaded');
+    } catch (error: any) {
+      toast.error(`Upload failed: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   // Create organization
   const createMutation = useMutation({
-    mutationFn: async (data: typeof formData) => {
-      const { error } = await supabase.from('organizations').insert({
+    mutationFn: async (data: FormData) => {
+      const { data: newOrg, error } = await supabase.from('organizations').insert({
         name: data.name.trim(),
         description: data.description.trim() || null,
         active: data.active,
-      });
+        logo_url: data.logo_url || null,
+        primary_color: data.primary_color || null,
+        max_users: data.max_users ? parseInt(data.max_users) : null,
+      }).select().single();
+      
       if (error) throw error;
+
+      // Add allowed courses
+      if (data.allowedCourseIds.length > 0) {
+        const { error: coursesError } = await supabase
+          .from('organization_courses')
+          .insert(data.allowedCourseIds.map(courseId => ({
+            organization_id: newOrg.id,
+            course_id: courseId,
+          })));
+        if (coursesError) throw coursesError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-organizations'] });
@@ -99,16 +207,32 @@ export function OrganizationManagement() {
 
   // Update organization
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: typeof formData }) => {
+    mutationFn: async ({ id, data }: { id: string; data: FormData }) => {
       const { error } = await supabase
         .from('organizations')
         .update({
           name: data.name.trim(),
           description: data.description.trim() || null,
           active: data.active,
+          logo_url: data.logo_url || null,
+          primary_color: data.primary_color || null,
+          max_users: data.max_users ? parseInt(data.max_users) : null,
         })
         .eq('id', id);
       if (error) throw error;
+
+      // Update allowed courses - delete existing and insert new
+      await supabase.from('organization_courses').delete().eq('organization_id', id);
+      
+      if (data.allowedCourseIds.length > 0) {
+        const { error: coursesError } = await supabase
+          .from('organization_courses')
+          .insert(data.allowedCourseIds.map(courseId => ({
+            organization_id: id,
+            course_id: courseId,
+          })));
+        if (coursesError) throw coursesError;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-organizations'] });
@@ -139,17 +263,29 @@ export function OrganizationManagement() {
   });
 
   const resetForm = () => {
-    setFormData({ name: '', description: '', active: true });
+    setFormData({ 
+      name: '', 
+      description: '', 
+      active: true,
+      logo_url: '',
+      primary_color: '#3b82f6',
+      max_users: '',
+      allowedCourseIds: [],
+    });
     setEditingOrg(null);
     setIsDialogOpen(false);
   };
 
-  const handleEdit = (org: Organization) => {
+  const handleEdit = (org: OrganizationWithStats) => {
     setEditingOrg(org);
     setFormData({
       name: org.name,
       description: org.description || '',
       active: org.active,
+      logo_url: org.logo_url || '',
+      primary_color: org.primary_color || '#3b82f6',
+      max_users: org.max_users?.toString() || '',
+      allowedCourseIds: org.allowedCourseIds,
     });
     setIsDialogOpen(true);
   };
@@ -165,6 +301,15 @@ export function OrganizationManagement() {
     } else {
       createMutation.mutate(formData);
     }
+  };
+
+  const toggleCourse = (courseId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      allowedCourseIds: prev.allowedCourseIds.includes(courseId)
+        ? prev.allowedCourseIds.filter(id => id !== courseId)
+        : [...prev.allowedCourseIds, courseId],
+    }));
   };
 
   if (!isSuperAdmin) {
@@ -219,7 +364,7 @@ export function OrganizationManagement() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Organizations</CardTitle>
-              <CardDescription>Manage organizations that users can belong to</CardDescription>
+              <CardDescription>Manage organizations with branding, course access, and user limits</CardDescription>
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
@@ -228,45 +373,186 @@ export function OrganizationManagement() {
                   New Organization
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <form onSubmit={handleSubmit}>
                   <DialogHeader>
                     <DialogTitle>{editingOrg ? 'Edit Organization' : 'Create Organization'}</DialogTitle>
                     <DialogDescription>
-                      {editingOrg ? 'Update organization details' : 'Add a new organization to the system'}
+                      {editingOrg ? 'Update organization settings' : 'Add a new organization with custom settings'}
                     </DialogDescription>
                   </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Organization Name</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        placeholder="e.g., Acme Corporation"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description</Label>
-                      <Textarea
-                        id="description"
-                        value={formData.description}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        placeholder="Brief description of the organization"
-                        rows={3}
-                      />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        id="active"
-                        checked={formData.active}
-                        onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
-                      />
-                      <Label htmlFor="active">Organization is active</Label>
-                    </div>
-                  </div>
-                  <DialogFooter>
+                  
+                  <Tabs defaultValue="general" className="mt-4">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="general">General</TabsTrigger>
+                      <TabsTrigger value="branding">Branding</TabsTrigger>
+                      <TabsTrigger value="courses">Courses</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="general" className="space-y-4 mt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Organization Name</Label>
+                        <Input
+                          id="name"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="e.g., Acme Corporation"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Textarea
+                          id="description"
+                          value={formData.description}
+                          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                          placeholder="Brief description of the organization"
+                          rows={3}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="max_users">User Limit</Label>
+                        <Input
+                          id="max_users"
+                          type="number"
+                          min={0}
+                          value={formData.max_users}
+                          onChange={(e) => setFormData({ ...formData, max_users: e.target.value })}
+                          placeholder="Leave empty for unlimited"
+                        />
+                        <p className="text-xs text-muted-foreground">Maximum number of users allowed in this organization</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="active"
+                          checked={formData.active}
+                          onCheckedChange={(checked) => setFormData({ ...formData, active: checked })}
+                        />
+                        <Label htmlFor="active">Organization is active</Label>
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="branding" className="space-y-4 mt-4">
+                      <div className="space-y-2">
+                        <Label>Organization Logo</Label>
+                        <div className="flex items-center gap-4">
+                          {formData.logo_url ? (
+                            <div className="relative">
+                              <img 
+                                src={formData.logo_url} 
+                                alt="Logo preview" 
+                                className="h-16 w-16 object-contain rounded border"
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute -top-2 -right-2 h-6 w-6 p-0 rounded-full bg-destructive text-destructive-foreground"
+                                onClick={() => setFormData({ ...formData, logo_url: '' })}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="h-16 w-16 border-2 border-dashed rounded flex items-center justify-center text-muted-foreground">
+                              <Building2 className="h-6 w-6" />
+                            </div>
+                          )}
+                          <div>
+                            <input
+                              type="file"
+                              ref={fileInputRef}
+                              className="hidden"
+                              accept="image/*"
+                              onChange={(e) => e.target.files?.[0] && handleLogoUpload(e.target.files[0])}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={uploading}
+                            >
+                              {uploading ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Upload className="h-4 w-4 mr-2" />
+                              )}
+                              Upload Logo
+                            </Button>
+                            <p className="text-xs text-muted-foreground mt-1">Max 2MB, PNG or JPG</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="primary_color" className="flex items-center gap-2">
+                          <Palette className="h-4 w-4" />
+                          Primary Color
+                        </Label>
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            id="primary_color"
+                            value={formData.primary_color}
+                            onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })}
+                            className="h-10 w-14 rounded border cursor-pointer"
+                          />
+                          <Input
+                            value={formData.primary_color}
+                            onChange={(e) => setFormData({ ...formData, primary_color: e.target.value })}
+                            className="w-28"
+                            placeholder="#3b82f6"
+                          />
+                          <div 
+                            className="h-10 flex-1 rounded flex items-center justify-center text-white text-sm font-medium"
+                            style={{ backgroundColor: formData.primary_color }}
+                          >
+                            Preview
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+                    
+                    <TabsContent value="courses" className="space-y-4 mt-4">
+                      <div className="space-y-2">
+                        <Label className="flex items-center gap-2">
+                          <BookOpen className="h-4 w-4" />
+                          Allowed Courses
+                        </Label>
+                        <p className="text-sm text-muted-foreground">
+                          Select which courses users from this organization can access. 
+                          Leave all unchecked to allow access to all courses.
+                        </p>
+                      </div>
+                      <div className="border rounded-lg max-h-64 overflow-y-auto">
+                        {courses.length === 0 ? (
+                          <p className="text-center py-4 text-muted-foreground">No courses available</p>
+                        ) : (
+                          <div className="divide-y">
+                            {courses.map((course) => (
+                              <label 
+                                key={course.id}
+                                className="flex items-center gap-3 p-3 hover:bg-muted/50 cursor-pointer"
+                              >
+                                <Checkbox
+                                  checked={formData.allowedCourseIds.includes(course.id)}
+                                  onCheckedChange={() => toggleCourse(course.id)}
+                                />
+                                <span className="text-sm">{course.title}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {formData.allowedCourseIds.length > 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          {formData.allowedCourseIds.length} course{formData.allowedCourseIds.length !== 1 ? 's' : ''} selected
+                        </p>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+
+                  <DialogFooter className="mt-6">
                     <Button type="button" variant="outline" onClick={resetForm}>
                       Cancel
                     </Button>
@@ -298,6 +584,7 @@ export function OrganizationManagement() {
                 <TableRow>
                   <TableHead>Organization</TableHead>
                   <TableHead>Users</TableHead>
+                  <TableHead>Courses</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -307,15 +594,43 @@ export function OrganizationManagement() {
                 {organizations.map((org) => (
                   <TableRow key={org.id}>
                     <TableCell>
-                      <div>
-                        <p className="font-medium">{org.name}</p>
-                        {org.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-1">{org.description}</p>
+                      <div className="flex items-center gap-3">
+                        {org.logo_url ? (
+                          <img 
+                            src={org.logo_url} 
+                            alt={org.name} 
+                            className="h-8 w-8 object-contain rounded"
+                          />
+                        ) : (
+                          <div 
+                            className="h-8 w-8 rounded flex items-center justify-center text-white text-xs font-bold"
+                            style={{ backgroundColor: org.primary_color || '#3b82f6' }}
+                          >
+                            {org.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <p className="font-medium">{org.name}</p>
+                          {org.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-1">{org.description}</p>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Badge variant="secondary">{org.userCount}</Badge>
+                        {org.max_users && (
+                          <span className="text-xs text-muted-foreground">/ {org.max_users}</span>
                         )}
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{org.userCount} users</Badge>
+                      {org.allowedCourseIds.length === 0 ? (
+                        <Badge variant="outline">All courses</Badge>
+                      ) : (
+                        <Badge variant="secondary">{org.allowedCourseIds.length} courses</Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant={org.active ? 'default' : 'secondary'}>
@@ -326,7 +641,7 @@ export function OrganizationManagement() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(org)}>
-                          <Pencil className="h-4 w-4" />
+                          <Settings className="h-4 w-4" />
                         </Button>
                         {org.userCount === 0 ? (
                           <AlertDialog>
