@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2, Download, Upload, FileJson, FileSpreadsheet, FileDown, GripVertical } from 'lucide-react';
@@ -54,6 +55,7 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState({
     prompt: '',
@@ -217,6 +219,51 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
       toast.error(`Failed to duplicate question: ${error.message}`);
     },
   });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase
+        .from('questions')
+        .delete()
+        .in('id', ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions', moduleId] });
+      toast.success(`Deleted ${selectedIds.size} questions successfully`);
+      setSelectedIds(new Set());
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete questions: ${error.message}`);
+    },
+  });
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === questions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(questions.map(q => q.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedIds.size} question${selectedIds.size > 1 ? 's' : ''}? This action cannot be undone.`)) {
+      bulkDeleteMutation.mutate(Array.from(selectedIds));
+    }
+  };
 
   const resetForm = () => {
     setFormData({
@@ -811,31 +858,66 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
             <p>No questions yet. Create your first question to get started.</p>
           </div>
         ) : (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={questions.map(q => q.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <div className="space-y-4">
-                {questions.map((question, index) => (
-                  <SortableQuestionCard
-                    key={question.id}
-                    question={question}
-                    index={index}
-                    onEdit={() => handleEdit(question)}
-                    onDelete={() => handleDelete(question)}
-                    onDuplicate={() => duplicateMutation.mutate(question)}
-                    isDeleting={deleteMutation.isPending}
-                    isDuplicating={duplicateMutation.isPending}
-                  />
-                ))}
+          <>
+            {/* Bulk selection header */}
+            <div className="flex items-center justify-between mb-4 pb-3 border-b">
+              <div className="flex items-center gap-3">
+                <Checkbox 
+                  checked={selectedIds.size === questions.length && questions.length > 0}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all questions"
+                />
+                <span className="text-sm text-muted-foreground">
+                  {selectedIds.size > 0 
+                    ? `${selectedIds.size} of ${questions.length} selected`
+                    : `${questions.length} question${questions.length !== 1 ? 's' : ''}`
+                  }
+                </span>
               </div>
-            </SortableContext>
-          </DndContext>
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleteMutation.isPending}
+                >
+                  {bulkDeleteMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4 mr-2" />
+                  )}
+                  Delete Selected
+                </Button>
+              )}
+            </div>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={questions.map(q => q.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-4">
+                  {questions.map((question, index) => (
+                    <SortableQuestionCard
+                      key={question.id}
+                      question={question}
+                      index={index}
+                      isSelected={selectedIds.has(question.id)}
+                      onToggleSelect={() => toggleSelection(question.id)}
+                      onEdit={() => handleEdit(question)}
+                      onDelete={() => handleDelete(question)}
+                      onDuplicate={() => duplicateMutation.mutate(question)}
+                      isDeleting={deleteMutation.isPending}
+                      isDuplicating={duplicateMutation.isPending}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </>
         )}
       </CardContent>
     </Card>
@@ -846,6 +928,8 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
 interface SortableQuestionCardProps {
   question: Question;
   index: number;
+  isSelected: boolean;
+  onToggleSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -856,6 +940,8 @@ interface SortableQuestionCardProps {
 function SortableQuestionCard({
   question,
   index,
+  isSelected,
+  onToggleSelect,
   onEdit,
   onDelete,
   onDuplicate,
@@ -871,6 +957,7 @@ function SortableQuestionCard({
     isDragging,
   } = useSortable({ id: question.id });
 
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -880,15 +967,22 @@ function SortableQuestionCard({
   const choices = question.choices as Record<string, string>;
 
   return (
-    <Card ref={setNodeRef} style={style} className="border">
+    <Card ref={setNodeRef} style={style} className={`border ${isSelected ? 'ring-2 ring-primary' : ''}`}>
       <CardContent className="pt-4">
         <div className="flex items-start justify-between gap-4">
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground shrink-0"
-          >
-            <GripVertical className="h-5 w-5" />
+          <div className="flex items-center gap-2 shrink-0">
+            <Checkbox 
+              checked={isSelected}
+              onCheckedChange={onToggleSelect}
+              aria-label={`Select question ${index + 1}`}
+            />
+            <div
+              {...attributes}
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground"
+            >
+              <GripVertical className="h-5 w-5" />
+            </div>
           </div>
           <div className="flex-1 space-y-3">
             <div className="flex items-start gap-2">
