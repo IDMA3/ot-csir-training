@@ -1,13 +1,19 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { usePlatformStats } from '@/hooks/usePlatformStats';
 import { Button } from '@/components/ui/button';
-import { Shield, BookOpen, Award, Clock, CheckCircle } from 'lucide-react';
+import { SkipLink } from '@/components/SkipLink';
+import { Shield, BookOpen, Award, Clock, CheckCircle, Users, GraduationCap } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const Index = () => {
   const { user } = useAuth();
+  const { data: stats, isLoading: statsLoading } = usePlatformStats();
 
   return (
     <div className="min-h-screen bg-background">
+      <SkipLink />
+      
       {/* Hero */}
       <div className="gradient-primary text-primary-foreground py-20 px-4">
         <div className="container max-w-4xl mx-auto text-center">
@@ -28,23 +34,74 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Features */}
-      <div className="container max-w-5xl mx-auto py-16 px-4">
+      {/* Dynamic Stats */}
+      <div className="container max-w-5xl mx-auto py-16 px-4" id="main-content">
+        <div className="grid md:grid-cols-4 gap-6 mb-16">
+          <div className="text-center p-6 rounded-lg bg-card border border-border">
+            <div className="w-12 h-12 rounded-full bg-primary/10 mx-auto mb-3 flex items-center justify-center">
+              <BookOpen className="w-6 h-6 text-primary" />
+            </div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16 mx-auto mb-1" />
+            ) : (
+              <p className="text-3xl font-bold text-foreground">{stats?.totalCourses || 0}</p>
+            )}
+            <p className="text-sm text-muted-foreground">Courses Available</p>
+          </div>
+          
+          <div className="text-center p-6 rounded-lg bg-card border border-border">
+            <div className="w-12 h-12 rounded-full bg-accent/10 mx-auto mb-3 flex items-center justify-center">
+              <Users className="w-6 h-6 text-accent" />
+            </div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16 mx-auto mb-1" />
+            ) : (
+              <p className="text-3xl font-bold text-foreground">{stats?.totalLearners || 0}</p>
+            )}
+            <p className="text-sm text-muted-foreground">Learners Trained</p>
+          </div>
+          
+          <div className="text-center p-6 rounded-lg bg-card border border-border">
+            <div className="w-12 h-12 rounded-full bg-success/10 mx-auto mb-3 flex items-center justify-center">
+              <Award className="w-6 h-6 text-success" />
+            </div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16 mx-auto mb-1" />
+            ) : (
+              <p className="text-3xl font-bold text-foreground">{stats?.certificatesIssued || 0}</p>
+            )}
+            <p className="text-sm text-muted-foreground">Certificates Issued</p>
+          </div>
+          
+          <div className="text-center p-6 rounded-lg bg-card border border-border">
+            <div className="w-12 h-12 rounded-full bg-warning/10 mx-auto mb-3 flex items-center justify-center">
+              <Clock className="w-6 h-6 text-warning" />
+            </div>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-16 mx-auto mb-1" />
+            ) : (
+              <p className="text-3xl font-bold text-foreground">{stats?.averageCourseDuration || 15}</p>
+            )}
+            <p className="text-sm text-muted-foreground">Avg. Minutes</p>
+          </div>
+        </div>
+
+        {/* Features */}
         <div className="grid md:grid-cols-3 gap-8">
           <div className="text-center p-6">
             <Clock className="w-12 h-12 text-accent mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">15 Minutes</h3>
-            <p className="text-muted-foreground">Self-paced micro-training designed for busy professionals</p>
+            <h3 className="text-xl font-semibold mb-2">Self-Paced Learning</h3>
+            <p className="text-muted-foreground">Micro-training designed for busy professionals with flexible scheduling</p>
           </div>
           <div className="text-center p-6">
-            <BookOpen className="w-12 h-12 text-accent mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">6 Modules + Exam</h3>
-            <p className="text-muted-foreground">Comprehensive coverage of CSIR fundamentals with quizzes</p>
+            <GraduationCap className="w-12 h-12 text-accent mx-auto mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Interactive Modules</h3>
+            <p className="text-muted-foreground">Comprehensive coverage with quizzes and assessments</p>
           </div>
           <div className="text-center p-6">
             <Award className="w-12 h-12 text-accent mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Certificate</h3>
-            <p className="text-muted-foreground">Earn a verifiable certificate upon completion</p>
+            <h3 className="text-xl font-semibold mb-2">Verifiable Certificates</h3>
+            <p className="text-muted-foreground">Earn certificates upon completion with unique verification IDs</p>
           </div>
         </div>
 

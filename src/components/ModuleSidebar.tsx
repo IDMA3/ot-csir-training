@@ -24,6 +24,7 @@ interface ModuleSidebarProps {
   isModuleUnlocked: (module: Module) => boolean;
   progressPercentage: number;
   courseDuration: number;
+  courseTitle?: string;
 }
 
 export function ModuleSidebar({
@@ -34,6 +35,7 @@ export function ModuleSidebar({
   isModuleUnlocked,
   progressPercentage,
   courseDuration,
+  courseTitle = 'Course Training',
 }: ModuleSidebarProps) {
   const getModuleStatus = (module: Module) => {
     const isCompleted = progress.some(p => p.module_id === module.id && p.completed);
@@ -43,12 +45,18 @@ export function ModuleSidebar({
     return { isCompleted, isUnlocked, isActive };
   };
 
+  const completedCount = progress.filter(p => p.completed).length;
+  const remainingCount = modules.length - completedCount;
+
   return (
-    <aside className="w-80 bg-sidebar flex flex-col h-full border-r border-sidebar-border">
+    <aside 
+      className="w-80 bg-sidebar flex flex-col h-full border-r border-sidebar-border"
+      aria-label="Course navigation"
+    >
       {/* Header */}
       <div className="p-6 border-b border-sidebar-border">
         <h2 className="text-lg font-semibold text-sidebar-foreground mb-1">
-          CSIR Training
+          {courseTitle}
         </h2>
         <p className="text-sm text-sidebar-foreground/70">
           {courseDuration} minute micro-training
@@ -60,13 +68,22 @@ export function ModuleSidebar({
             <span className="text-sidebar-foreground/70">Progress</span>
             <span className="font-medium text-sidebar-primary">{progressPercentage}%</span>
           </div>
-          <Progress value={progressPercentage} className="h-2 bg-sidebar-accent" />
+          <Progress 
+            value={progressPercentage} 
+            className="h-2 bg-sidebar-accent" 
+            aria-label={`Course progress: ${progressPercentage}%`}
+          />
+          {progressPercentage > 0 && progressPercentage < 100 && (
+            <p className="text-xs text-sidebar-foreground/50 mt-1">
+              {remainingCount} module{remainingCount !== 1 ? 's' : ''} remaining
+            </p>
+          )}
         </div>
       </div>
 
       {/* Module list */}
-      <nav className="flex-1 overflow-y-auto p-4">
-        <ul className="space-y-2">
+      <nav className="flex-1 overflow-y-auto p-4" aria-label="Module list">
+        <ul className="space-y-2" role="list">
           {modules.map((module) => {
             const { isCompleted, isUnlocked, isActive } = getModuleStatus(module);
 
@@ -75,13 +92,15 @@ export function ModuleSidebar({
                 <Button
                   variant="ghost"
                   className={cn(
-                    "w-full justify-start gap-3 h-auto py-3 px-4 text-left transition-all",
+                    "w-full justify-start gap-3 h-auto py-3 px-4 text-left transition-all focus-ring",
                     isActive && "bg-sidebar-accent text-sidebar-accent-foreground",
                     !isActive && isUnlocked && "text-sidebar-foreground hover:bg-sidebar-accent/50",
                     !isUnlocked && "text-sidebar-foreground/40 cursor-not-allowed hover:bg-transparent"
                   )}
                   onClick={() => isUnlocked && onSelectModule(module.id)}
                   disabled={!isUnlocked}
+                  aria-current={isActive ? 'step' : undefined}
+                  aria-disabled={!isUnlocked}
                 >
                   {/* Status icon */}
                   <div
@@ -92,6 +111,7 @@ export function ModuleSidebar({
                       !isActive && !isCompleted && isUnlocked && "bg-sidebar-accent text-sidebar-accent-foreground",
                       !isUnlocked && "bg-sidebar-accent/50 text-sidebar-foreground/40"
                     )}
+                    aria-hidden="true"
                   >
                     {isCompleted ? (
                       <Check className="w-4 h-4" />
@@ -119,12 +139,13 @@ export function ModuleSidebar({
                     )}>
                       {module.estimated_minutes} min
                       {module.type === 'exam' && ' • 80% to pass'}
+                      {isCompleted && ' • Completed'}
                     </p>
                   </div>
 
                   {/* Arrow for active */}
                   {isActive && (
-                    <ChevronRight className="w-4 h-4 text-sidebar-primary" />
+                    <ChevronRight className="w-4 h-4 text-sidebar-primary" aria-hidden="true" />
                   )}
                 </Button>
               </li>
@@ -136,7 +157,9 @@ export function ModuleSidebar({
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
         <p className="text-xs text-sidebar-foreground/50 text-center">
-          Complete all modules to earn your certificate
+          {progressPercentage === 100 
+            ? '🎉 Congratulations! View your certificate.'
+            : 'Complete all modules to earn your certificate'}
         </p>
       </div>
     </aside>
