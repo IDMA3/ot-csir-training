@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Clock, Award, CheckCircle } from 'lucide-react';
+import { BookOpen, Clock, Award, CheckCircle, Eye, ArrowRight } from 'lucide-react';
 
 interface CourseCardProps {
   id: string;
@@ -33,11 +33,11 @@ export function CourseCard({
   const isComplete = progressPercentage === 100;
 
   return (
-    <Card className="flex flex-col h-full">
+    <Card className="flex flex-col h-full transition-shadow hover:shadow-md focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1">
-            <CardTitle className="text-xl">{title}</CardTitle>
+            <CardTitle className="text-xl line-clamp-2">{title}</CardTitle>
             {category && (
               <Badge variant="outline" className="text-xs">
                 {category}
@@ -45,7 +45,7 @@ export function CourseCard({
             )}
           </div>
           {hasCertificate && (
-            <Badge variant="secondary" className="flex items-center gap-1 shrink-0">
+            <Badge className="bg-success text-success-foreground flex items-center gap-1 shrink-0">
               <Award className="h-3 w-3" />
               Certified
             </Badge>
@@ -58,11 +58,11 @@ export function CourseCard({
       <CardContent className="flex-1">
         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
           <div className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
+            <Clock className="h-4 w-4" aria-hidden="true" />
             <span>{durationMinutes} min</span>
           </div>
           <div className="flex items-center gap-1">
-            <BookOpen className="h-4 w-4" />
+            <BookOpen className="h-4 w-4" aria-hidden="true" />
             <span>{moduleCount} modules</span>
           </div>
         </div>
@@ -73,28 +73,53 @@ export function CourseCard({
               <span className="text-muted-foreground">Progress</span>
               <span className="font-medium">{progressPercentage}%</span>
             </div>
-            <Progress value={progressPercentage} className="h-2" />
+            <Progress value={progressPercentage} className="h-2" aria-label={`Course progress: ${progressPercentage}%`} />
           </div>
         )}
       </CardContent>
-      <CardFooter>
+      <CardFooter className="gap-2">
         {isEnrolled ? (
-          <Button asChild className="w-full">
-            <Link to={`/courses/${id}`}>
-              {isComplete ? (
-                <>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Review Course
-                </>
-              ) : (
-                'Continue Training'
-              )}
-            </Link>
-          </Button>
+          <>
+            <Button asChild className="flex-1 focus-ring">
+              <Link to={`/courses/${id}`}>
+                {isComplete ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 mr-2" aria-hidden="true" />
+                    Review Course
+                  </>
+                ) : progressPercentage > 0 ? (
+                  <>
+                    Continue
+                    <ArrowRight className="h-4 w-4 ml-2" aria-hidden="true" />
+                  </>
+                ) : (
+                  <>
+                    Start Training
+                    <ArrowRight className="h-4 w-4 ml-2" aria-hidden="true" />
+                  </>
+                )}
+              </Link>
+            </Button>
+            {hasCertificate && (
+              <Button variant="outline" size="icon" asChild className="focus-ring" aria-label="View certificate">
+                <Link to={`/courses/${id}/certificate`}>
+                  <Award className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+          </>
         ) : (
-          <Button onClick={onEnroll} className="w-full">
-            Start Course
-          </Button>
+          <>
+            <Button variant="outline" asChild className="flex-1 focus-ring">
+              <Link to={`/courses/${id}/preview`}>
+                <Eye className="h-4 w-4 mr-2" aria-hidden="true" />
+                View Details
+              </Link>
+            </Button>
+            <Button onClick={onEnroll} className="flex-1 focus-ring">
+              Enroll Now
+            </Button>
+          </>
         )}
       </CardFooter>
     </Card>
