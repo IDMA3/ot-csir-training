@@ -515,22 +515,22 @@ export function AnalyticsDashboard() {
         </Card>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
         {/* Score Distribution */}
         <Card>
           <CardHeader>
             <CardTitle>Score Distribution</CardTitle>
             <CardDescription>Assessment scores by range</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-hidden">
             {scoreDistribution.every(s => s.count === 0) ? (
               <p className="text-muted-foreground text-center py-8">No assessment data available</p>
             ) : (
-              <ChartContainer config={chartConfig} className="h-[250px]">
-                <BarChart data={scoreDistribution} margin={{ left: 10, right: 10 }}>
+              <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                <BarChart data={scoreDistribution} margin={{ left: 0, right: 10, top: 10, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="range" tick={{ fontSize: 12 }} />
-                  <YAxis />
+                  <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                  <YAxis width={35} />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                     {scoreDistribution.map((entry, index) => (
@@ -549,20 +549,20 @@ export function AnalyticsDashboard() {
             <CardTitle>Enrollments by Course</CardTitle>
             <CardDescription>Top 5 courses by enrollment count</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-hidden">
             {enrollmentsByCourseData.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No enrollment data available</p>
             ) : (
-              <ChartContainer config={chartConfig} className="h-[250px]">
-                <BarChart data={enrollmentsByCourseData} layout="vertical" margin={{ left: 20, right: 20 }}>
+              <ChartContainer config={chartConfig} className="h-[250px] w-full">
+                <BarChart data={enrollmentsByCourseData} layout="vertical" margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                   <XAxis type="number" />
                   <YAxis 
                     dataKey="name" 
                     type="category" 
-                    width={100}
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 15)}...` : value}
+                    width={110}
+                    tick={{ fontSize: 11 }}
+                    tickFormatter={(value) => value.length > 16 ? `${value.slice(0, 16)}...` : value}
                   />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
@@ -578,27 +578,29 @@ export function AnalyticsDashboard() {
             <CardTitle>Assessment Results</CardTitle>
             <CardDescription>Overall pass/fail rates ({kpiMetrics?.totalAttempts} attempts)</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="overflow-hidden">
             {passFailData.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No assessment data available</p>
             ) : (
-              <ChartContainer config={chartConfig} className="h-[250px]">
+              <ChartContainer config={chartConfig} className="h-[250px] w-full">
                 <PieChart>
                   <Pie
                     data={passFailData}
                     cx="50%"
                     cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
+                    innerRadius={50}
+                    outerRadius={70}
                     paddingAngle={5}
                     dataKey="value"
-                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                    label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
                   >
                     {passFailData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.fill} />
                     ))}
                   </Pie>
                   <ChartTooltip content={<ChartTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
                 </PieChart>
               </ChartContainer>
             )}
@@ -647,16 +649,16 @@ export function AnalyticsDashboard() {
             <CardTitle>Activity Over Time</CardTitle>
             <CardDescription>Enrollments, completions, and certificates in selected period</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer config={chartConfig} className="h-[300px]">
-              <LineChart data={completionsOverTime} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+          <CardContent className="overflow-hidden">
+            <ChartContainer config={chartConfig} className="h-[300px] w-full">
+              <LineChart data={completionsOverTime} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11 }}
                   interval="preserveStartEnd"
                 />
-                <YAxis />
+                <YAxis width={35} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Line 
