@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,10 +7,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface LearnerReport {
@@ -29,7 +30,8 @@ interface LearnerReport {
 }
 
 export default function Admin() {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [nameFilter, setNameFilter] = useState('');
+  const [organizationFilter, setOrganizationFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
@@ -115,32 +117,57 @@ export default function Admin() {
         };
       }) || [];
 
-      // Filter by date range if specified
-      let filtered = reports;
-      if (startDate || endDate) {
-        filtered = reports.filter(r => {
-          if (!r.completion_date) return false;
-          const completionDate = new Date(r.completion_date);
-          if (startDate && completionDate < startDate) return false;
-          if (endDate && completionDate > endDate) return false;
-          return true;
-        });
-      }
-
-      return filtered;
+      return reports;
     },
   });
 
-  // Filter by search query
-  const filteredLearners = learners.filter(l => {
-    const searchLower = searchQuery.toLowerCase();
-    return (
-      l.first_name.toLowerCase().includes(searchLower) ||
-      l.last_name.toLowerCase().includes(searchLower) ||
-      l.organization?.toLowerCase().includes(searchLower) ||
-      l.job_role?.toLowerCase().includes(searchLower)
-    );
-  });
+  // Get unique organizations for filter dropdown
+  const organizations = useMemo(() => {
+    const orgs = learners
+      .map(l => l.organization)
+      .filter((org): org is string => !!org);
+    return [...new Set(orgs)].sort();
+  }, [learners]);
+
+  // Apply all filters
+  const filteredLearners = useMemo(() => {
+    return learners.filter(l => {
+      // Name filter
+      if (nameFilter) {
+        const nameLower = nameFilter.toLowerCase();
+        const fullName = `${l.first_name} ${l.last_name}`.toLowerCase();
+        if (!fullName.includes(nameLower)) return false;
+      }
+      
+      // Organization filter
+      if (organizationFilter && organizationFilter !== 'all') {
+        if (l.organization !== organizationFilter) return false;
+      }
+      
+      // Date range filter
+      if (startDate || endDate) {
+        if (!l.completion_date) return false;
+        const completionDate = new Date(l.completion_date);
+        if (startDate && completionDate < startDate) return false;
+        if (endDate) {
+          const endOfDay = new Date(endDate);
+          endOfDay.setHours(23, 59, 59, 999);
+          if (completionDate > endOfDay) return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [learners, nameFilter, organizationFilter, startDate, endDate]);
+
+  const hasActiveFilters = nameFilter || organizationFilter !== 'all' || startDate || endDate;
+
+  const clearFilters = () => {
+    setNameFilter('');
+    setOrganizationFilter('all');
+    setStartDate(undefined);
+    setEndDate(undefined);
+  };
 
   // Export to CSV
   const exportCSV = () => {
@@ -220,42 +247,75 @@ export default function Admin() {
             <CardDescription>Filter learners by name, organization, or completion date range</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name or organization..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Name Search */}
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name..."
+                    value={nameFilter}
+                    onChange={(e) => setNameFilter(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                
+                {/* Organization Dropdown */}
+                <Select value={organizationFilter} onValueChange={setOrganizationFilter}>
+                  <SelectTrigger className="w-full md:w-[200px]">
+                    <SelectValue placeholder="All organizations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All organizations</SelectItem>
+                    {organizations.map(org => (
+                      <SelectItem key={org} value={org}>{org}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "PPP") : "Start date"}
+              
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
+                {/* Date Range */}
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground whitespace-nowrap">Completed between:</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal w-[140px]", !startDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {startDate ? format(startDate, "MMM d, yyyy") : "Start"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-muted-foreground">–</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal w-[140px]", !endDate && "text-muted-foreground")}>
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {endDate ? format(endDate, "MMM d, yyyy") : "End"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div className="flex gap-2 ml-auto">
+                  {hasActiveFilters && (
+                    <Button onClick={clearFilters} variant="ghost" size="sm">
+                      <X className="mr-2 h-4 w-4" />
+                      Clear filters
+                    </Button>
+                  )}
+                  <Button onClick={exportCSV} variant="outline" size="sm">
+                    <Download className="mr-2 h-4 w-4" />
+                    Export CSV
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")}>
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "PPP") : "End date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-              <Button onClick={exportCSV} variant="outline">
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </Button>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
