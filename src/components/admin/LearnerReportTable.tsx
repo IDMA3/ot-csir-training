@@ -20,14 +20,25 @@ export interface LearnerReport {
   best_exam_score: number | null;
   certificate_id: string | null;
   completion_date: string | null;
+  enrolled_courses?: string[];
+}
+
+interface Course {
+  id: string;
+  title: string;
 }
 
 interface LearnerReportTableProps {
   learners: LearnerReport[];
   isLoading: boolean;
+  courseFilter?: string;
+  courses?: Course[];
 }
 
-export function LearnerReportTable({ learners, isLoading }: LearnerReportTableProps) {
+export function LearnerReportTable({ learners, isLoading, courseFilter, courses = [] }: LearnerReportTableProps) {
+  const selectedCourseName = courseFilter && courseFilter !== 'all' 
+    ? courses.find(c => c.id === courseFilter)?.title 
+    : null;
   if (isLoading) {
     return <div className="text-center py-8 text-muted-foreground">Loading...</div>;
   }

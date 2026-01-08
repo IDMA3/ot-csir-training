@@ -7,6 +7,7 @@ src/
 ├── components/
 │   ├── admin/                 # Admin-specific components
 │   │   ├── AdminUserManagement.tsx
+│   │   ├── CourseAssignment.tsx
 │   │   ├── CourseManagement.tsx
 │   │   ├── LearnerDetailView.tsx
 │   │   ├── LearnerReportTable.tsx
@@ -102,6 +103,14 @@ Main content area displaying:
 
 ### Admin Components
 
+#### `CourseAssignment.tsx`
+Course assignment to users:
+- View all users with search/filter
+- Select multiple users for bulk assignment
+- Assign courses to selected users
+- View and manage existing enrollments
+- Remove users from courses
+
 #### `CourseManagement.tsx`
 Course administration:
 - Create, edit, delete courses
@@ -142,17 +151,19 @@ Content editing:
 Data table showing:
 - Learner names and emails
 - Organization
-- Progress percentage
+- Progress percentage (course-filtered when applicable)
 - Exam scores
 - Certificate status
 - Detail view trigger
+- Supports filtering by course
 
 #### `LearnerDetailView.tsx`
 Detailed learner information:
-- Profile summary
-- Module-by-module progress
-- Attempt history with scores
-- Certificate details
+- Profile summary (email, organization, job role, registration date)
+- Enrolled courses list with accordion
+- Course-grouped module progress with status indicators
+- Exam attempts per course with scores
+- Certificate details per course
 
 #### `AdminUserManagement.tsx`
 User administration:
