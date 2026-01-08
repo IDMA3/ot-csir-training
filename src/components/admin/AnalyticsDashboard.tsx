@@ -4,29 +4,21 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subDays, startOfDay, endOfDay } from 'date-fns';
-import { Loader2 } from 'lucide-react';
-
-const CHART_COLORS = [
-  'hsl(var(--primary))',
-  'hsl(var(--accent))',
-  'hsl(var(--success))',
-  'hsl(var(--warning))',
-  'hsl(var(--destructive))',
-];
+import { format, subDays, startOfDay, endOfDay, differenceInDays, differenceInHours } from 'date-fns';
+import { Loader2, TrendingUp, Clock, Target, Users, Award, BookOpen } from 'lucide-react';
 
 export function AnalyticsDashboard() {
   // Fetch analytics data
   const { data: analyticsData, isLoading } = useQuery({
     queryKey: ['admin-analytics'],
     queryFn: async () => {
-      // Parallel fetch all required data
-      const [coursesRes, enrollmentsRes, progressRes, attemptsRes, certificatesRes] = await Promise.all([
+      const [coursesRes, enrollmentsRes, progressRes, attemptsRes, certificatesRes, modulesRes] = await Promise.all([
         supabase.from('course').select('id, title'),
-        supabase.from('enrollments').select('id, course_id, enrolled_at'),
-        supabase.from('progress').select('id, module_id, completed, completed_at'),
-        supabase.from('attempts').select('id, module_id, passed, score, submitted_at'),
-        supabase.from('certificates').select('id, course_id, issued_at'),
+        supabase.from('enrollments').select('id, course_id, user_id, enrolled_at'),
+        supabase.from('progress').select('id, module_id, user_id, completed, completed_at'),
+        supabase.from('attempts').select('id, module_id, user_id, passed, score, submitted_at'),
+        supabase.from('certificates').select('id, course_id, user_id, issued_at'),
+        supabase.from('modules').select('id, course_id, type'),
       ]);
 
       return {
@@ -35,13 +27,79 @@ export function AnalyticsDashboard() {
         progress: progressRes.data || [],
         attempts: attemptsRes.data || [],
         certificates: certificatesRes.data || [],
+        modules: modulesRes.data || [],
       };
     },
     staleTime: 5 * 60 * 1000,
   });
 
+  // KPI Metrics
+  const kpiMetrics = useMemo(() => {
+    if (!analyticsData) return null;
+
+    // Average exam score
+    const examAttempts = analyticsData.attempts.filter(a => a.score !== null);
+    const avgScore = examAttempts.length > 0
+      ? examAttempts.reduce((sum, a) => sum + Number(a.score), 0) / examAttempts.length
+      : 0;
+
+    // Time to completion (enrollment to certificate)
+    const completionTimes: number[] = [];
+    analyticsData.certificates.forEach(cert => {
+      const enrollment = analyticsData.enrollments.find(
+        e => e.user_id === cert.user_id && e.course_id === cert.course_id
+      );
+      if (enrollment) {
+        const hours = differenceInHours(new Date(cert.issued_at), new Date(enrollment.enrolled_at));
+        if (hours > 0) completionTimes.push(hours);
+      }
+    });
+    const avgCompletionHours = completionTimes.length > 0
+      ? completionTimes.reduce((sum, h) => sum + h, 0) / completionTimes.length
+      : 0;
+
+    // Completion rate
+    const uniqueEnrollments = new Set(analyticsData.enrollments.map(e => `${e.user_id}-${e.course_id}`)).size;
+    const completedCourses = analyticsData.certificates.length;
+    const completionRate = uniqueEnrollments > 0 ? (completedCourses / uniqueEnrollments) * 100 : 0;
+
+    // Active learners (enrolled in last 7 days)
+    const sevenDaysAgo = subDays(new Date(), 7);
+    const activeLearners = new Set(
+      analyticsData.enrollments
+        .filter(e => new Date(e.enrolled_at) >= sevenDaysAgo)
+        .map(e => e.user_id)
+    ).size;
+
+    // Pass rate
+    const passRate = analyticsData.attempts.length > 0
+      ? (analyticsData.attempts.filter(a => a.passed).length / analyticsData.attempts.length) * 100
+      : 0;
+
+    // Modules completed per user (engagement)
+    const userModuleCompletions = new Map<string, number>();
+    analyticsData.progress.filter(p => p.completed).forEach(p => {
+      const count = userModuleCompletions.get(p.user_id) || 0;
+      userModuleCompletions.set(p.user_id, count + 1);
+    });
+    const avgModulesPerUser = userModuleCompletions.size > 0
+      ? Array.from(userModuleCompletions.values()).reduce((sum, c) => sum + c, 0) / userModuleCompletions.size
+      : 0;
+
+    return {
+      avgScore,
+      avgCompletionHours,
+      completionRate,
+      activeLearners,
+      passRate,
+      avgModulesPerUser,
+      totalAttempts: analyticsData.attempts.length,
+      totalCertificates: analyticsData.certificates.length,
+    };
+  }, [analyticsData]);
+
   // Enrollments by course
-  const enrollmentsByCoursaData = useMemo(() => {
+  const enrollmentsByCourseData = useMemo(() => {
     if (!analyticsData) return [];
     
     const courseMap = new Map<string, { name: string; count: number }>();
@@ -56,6 +114,27 @@ export function AnalyticsDashboard() {
       .filter(c => c.count > 0)
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
+  }, [analyticsData]);
+
+  // Score distribution
+  const scoreDistribution = useMemo(() => {
+    if (!analyticsData) return [];
+    
+    const ranges = [
+      { range: '0-59%', min: 0, max: 59, count: 0, fill: 'hsl(var(--destructive))' },
+      { range: '60-69%', min: 60, max: 69, count: 0, fill: 'hsl(var(--warning))' },
+      { range: '70-79%', min: 70, max: 79, count: 0, fill: 'hsl(var(--accent))' },
+      { range: '80-89%', min: 80, max: 89, count: 0, fill: 'hsl(var(--primary))' },
+      { range: '90-100%', min: 90, max: 100, count: 0, fill: 'hsl(var(--success))' },
+    ];
+
+    analyticsData.attempts.forEach(a => {
+      const score = Number(a.score);
+      const bucket = ranges.find(r => score >= r.min && score <= r.max);
+      if (bucket) bucket.count++;
+    });
+
+    return ranges;
   }, [analyticsData]);
 
   // Pass/Fail rates
@@ -84,6 +163,7 @@ export function AnalyticsDashboard() {
         fullDate: date,
         completions: 0,
         enrollments: 0,
+        certificates: 0,
       };
     });
 
@@ -109,26 +189,31 @@ export function AnalyticsDashboard() {
       }
     });
 
+    analyticsData.certificates.forEach(c => {
+      const issuedDate = new Date(c.issued_at);
+      const dayIndex = last30Days.findIndex(d => 
+        issuedDate >= startOfDay(d.fullDate) && issuedDate <= endOfDay(d.fullDate)
+      );
+      if (dayIndex >= 0) {
+        last30Days[dayIndex].certificates++;
+      }
+    });
+
     return last30Days;
   }, [analyticsData]);
 
   const chartConfig = {
-    completions: {
-      label: 'Completions',
-      color: 'hsl(var(--success))',
-    },
-    enrollments: {
-      label: 'Enrollments',
-      color: 'hsl(var(--primary))',
-    },
-    count: {
-      label: 'Enrollments',
-      color: 'hsl(var(--primary))',
-    },
-    value: {
-      label: 'Count',
-      color: 'hsl(var(--primary))',
-    },
+    completions: { label: 'Module Completions', color: 'hsl(var(--success))' },
+    enrollments: { label: 'Enrollments', color: 'hsl(var(--primary))' },
+    certificates: { label: 'Certificates', color: 'hsl(var(--accent))' },
+    count: { label: 'Count', color: 'hsl(var(--primary))' },
+    value: { label: 'Count', color: 'hsl(var(--primary))' },
+  };
+
+  const formatTime = (hours: number) => {
+    if (hours < 1) return `${Math.round(hours * 60)}m`;
+    if (hours < 24) return `${hours.toFixed(1)}h`;
+    return `${(hours / 24).toFixed(1)}d`;
   };
 
   if (isLoading) {
@@ -146,7 +231,97 @@ export function AnalyticsDashboard() {
         <p className="text-muted-foreground">Training platform performance metrics</p>
       </div>
 
+      {/* KPI Cards */}
+      <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">Avg Score</span>
+            </div>
+            <p className="text-2xl font-bold mt-2">{kpiMetrics?.avgScore.toFixed(1)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Clock className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">Avg Time to Complete</span>
+            </div>
+            <p className="text-2xl font-bold mt-2">{formatTime(kpiMetrics?.avgCompletionHours || 0)}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-success" />
+              <span className="text-sm text-muted-foreground">Completion Rate</span>
+            </div>
+            <p className="text-2xl font-bold mt-2">{kpiMetrics?.completionRate.toFixed(1)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">Active (7d)</span>
+            </div>
+            <p className="text-2xl font-bold mt-2">{kpiMetrics?.activeLearners}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <Award className="h-4 w-4 text-success" />
+              <span className="text-sm text-muted-foreground">Pass Rate</span>
+            </div>
+            <p className="text-2xl font-bold mt-2">{kpiMetrics?.passRate.toFixed(1)}%</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2">
+              <BookOpen className="h-4 w-4 text-primary" />
+              <span className="text-sm text-muted-foreground">Modules/User</span>
+            </div>
+            <p className="text-2xl font-bold mt-2">{kpiMetrics?.avgModulesPerUser.toFixed(1)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-6 md:grid-cols-2">
+        {/* Score Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Score Distribution</CardTitle>
+            <CardDescription>Assessment scores by range</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {scoreDistribution.every(s => s.count === 0) ? (
+              <p className="text-muted-foreground text-center py-8">No assessment data available</p>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-[250px]">
+                <BarChart data={scoreDistribution} margin={{ left: 10, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="range" tick={{ fontSize: 12 }} />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                    {scoreDistribution.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Enrollments by Course */}
         <Card>
           <CardHeader>
@@ -154,11 +329,11 @@ export function AnalyticsDashboard() {
             <CardDescription>Top 5 courses by enrollment count</CardDescription>
           </CardHeader>
           <CardContent>
-            {enrollmentsByCoursaData.length === 0 ? (
+            {enrollmentsByCourseData.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No enrollment data available</p>
             ) : (
               <ChartContainer config={chartConfig} className="h-[250px]">
-                <BarChart data={enrollmentsByCoursaData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                <BarChart data={enrollmentsByCourseData} layout="vertical" margin={{ left: 20, right: 20 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                   <XAxis type="number" />
                   <YAxis 
@@ -180,7 +355,7 @@ export function AnalyticsDashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Assessment Results</CardTitle>
-            <CardDescription>Overall pass/fail rates for all assessments</CardDescription>
+            <CardDescription>Overall pass/fail rates ({kpiMetrics?.totalAttempts} attempts)</CardDescription>
           </CardHeader>
           <CardContent>
             {passFailData.length === 0 ? (
@@ -209,11 +384,47 @@ export function AnalyticsDashboard() {
           </CardContent>
         </Card>
 
+        {/* Certificates Issued */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Certificates Issued</CardTitle>
+            <CardDescription>{kpiMetrics?.totalCertificates} total certificates</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {analyticsData?.certificates.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">No certificates issued yet</p>
+            ) : (
+              <div className="space-y-4 py-4">
+                {analyticsData?.courses.map(course => {
+                  const count = analyticsData.certificates.filter(c => c.course_id === course.id).length;
+                  const enrollmentCount = analyticsData.enrollments.filter(e => e.course_id === course.id).length;
+                  const rate = enrollmentCount > 0 ? (count / enrollmentCount) * 100 : 0;
+                  if (count === 0) return null;
+                  return (
+                    <div key={course.id} className="flex items-center justify-between">
+                      <span className="text-sm truncate max-w-[150px]" title={course.title}>{course.title}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-success rounded-full" 
+                            style={{ width: `${Math.min(rate, 100)}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium w-12 text-right">{count}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Activity Over Time */}
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Activity Over Time</CardTitle>
-            <CardDescription>Enrollments and module completions in the last 30 days</CardDescription>
+            <CardDescription>Enrollments, completions, and certificates in the last 30 days</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[300px]">
@@ -238,6 +449,13 @@ export function AnalyticsDashboard() {
                   type="monotone" 
                   dataKey="completions" 
                   stroke="hsl(var(--success))" 
+                  strokeWidth={2}
+                  dot={false}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="certificates" 
+                  stroke="hsl(var(--accent))" 
                   strokeWidth={2}
                   dot={false}
                 />
