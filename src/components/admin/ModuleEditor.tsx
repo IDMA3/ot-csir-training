@@ -4,7 +4,6 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Plus, Pencil, Trash2, GripVertical, Loader2, ArrowLeft, FileText, ClipboardList, Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { RichTextEditor } from './RichTextEditor';
 
 interface Module {
   id: string;
@@ -255,7 +255,7 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
         <div className="flex items-center justify-between mt-4">
           <div>
             <CardTitle>Modules for: {courseTitle}</CardTitle>
-            <CardDescription>Create and manage training modules with HTML content</CardDescription>
+            <CardDescription>Create and manage training modules with rich content</CardDescription>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <Button onClick={() => { resetForm(); setIsDialogOpen(true); }}>
@@ -319,35 +319,10 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="body_html">
-                      HTML Content
-                      <span className="text-xs text-muted-foreground ml-2">
-                        (supports HTML tags like &lt;h2&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;strong&gt;, etc.)
-                      </span>
-                    </Label>
-                    <Textarea
-                      id="body_html"
-                      value={formData.body_html}
-                      onChange={(e) => setFormData({ ...formData, body_html: e.target.value })}
-                      placeholder={`<h2>Module Title</h2>
-<p>Welcome to this module. Here you will learn about...</p>
-
-<h3>Key Concepts</h3>
-<ul>
-  <li>Concept one</li>
-  <li>Concept two</li>
-</ul>
-
-<p><strong>Important:</strong> Remember to...</p>`}
-                      className="font-mono text-sm min-h-[300px]"
-                      required
-                    />
-                  </div>
-                  <div className="rounded-md border p-4 bg-muted/30">
-                    <p className="text-sm font-medium mb-2">Preview:</p>
-                    <div 
-                      className="prose prose-sm max-w-none dark:prose-invert"
-                      dangerouslySetInnerHTML={{ __html: formData.body_html || '<p class="text-muted-foreground italic">Enter HTML content above to see preview</p>' }}
+                    <Label>Module Content</Label>
+                    <RichTextEditor
+                      content={formData.body_html}
+                      onChange={(html) => setFormData({ ...formData, body_html: html })}
                     />
                   </div>
                 </div>
