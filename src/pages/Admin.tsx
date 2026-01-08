@@ -24,6 +24,7 @@ export default function Admin() {
     canAccessCourses, 
     canAccessAdminManagement,
     canManageUsers,
+    canManageCourses,
   } = useAdminPermissions();
 
   // Handle navigation from dashboard overview
@@ -101,7 +102,7 @@ export default function Admin() {
 
           {/* Courses */}
           <TabsContent value="courses" className="space-y-6">
-            {isSuperAdmin && <CourseAssignment />}
+            {(isSuperAdmin || canManageCourses) && <CourseAssignment />}
             <CourseManagement organizationScope={isSuperAdmin ? null : organizationScope} />
           </TabsContent>
 
