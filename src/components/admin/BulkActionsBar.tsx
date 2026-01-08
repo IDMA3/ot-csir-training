@@ -2,11 +2,18 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Trash2, RotateCcw, BookPlus, X } from 'lucide-react';
+import { Trash2, RotateCcw, BookPlus, X, Building2 } from 'lucide-react';
 
 interface Course {
   id: string;
   title: string;
+}
+
+interface Organization {
+  id: string;
+  name: string;
+  max_users: number | null;
+  userCount: number;
 }
 
 interface BulkActionsBarProps {
@@ -15,7 +22,9 @@ interface BulkActionsBarProps {
   onBulkDelete: () => void;
   onBulkResetProgress: (courseId?: string) => void;
   onBulkEnroll: (courseId: string) => void;
+  onBulkAssignOrg: (orgId: string | null) => void;
   courses: Course[];
+  organizations: Organization[];
   canDeleteUsers: boolean;
   isProcessing: boolean;
 }
@@ -26,14 +35,25 @@ export function BulkActionsBar({
   onBulkDelete,
   onBulkResetProgress,
   onBulkEnroll,
+  onBulkAssignOrg,
   courses,
+  organizations,
   canDeleteUsers,
   isProcessing,
 }: BulkActionsBarProps) {
   const [enrollCourseId, setEnrollCourseId] = useState<string>('');
   const [resetCourseId, setResetCourseId] = useState<string>('all');
+  const [assignOrgId, setAssignOrgId] = useState<string>('');
 
   if (selectedCount === 0) return null;
+
+  const selectedOrg = assignOrgId && assignOrgId !== 'none' 
+    ? organizations.find(o => o.id === assignOrgId) 
+    : null;
+  
+  const wouldExceedLimit = selectedOrg?.max_users 
+    ? (selectedOrg.userCount + selectedCount) > selectedOrg.max_users 
+    : false;
 
   return (
     <div className="sticky top-0 z-10 bg-primary text-primary-foreground rounded-lg p-4 flex items-center justify-between gap-4 shadow-lg animate-in slide-in-from-top-2">
@@ -96,6 +116,70 @@ export function BulkActionsBar({
                 }}
               >
                 Enroll Users
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Bulk Assign Organization */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={isProcessing}
+            >
+              <Building2 className="h-4 w-4 mr-2" />
+              Assign Org
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Assign to Organization</AlertDialogTitle>
+              <AlertDialogDescription>
+                Select an organization for {selectedCount} {selectedCount === 1 ? 'user' : 'users'}.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4 space-y-2">
+              <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <span className="text-muted-foreground">Remove from organization</span>
+                  </SelectItem>
+                  {organizations.map(org => {
+                    const limitInfo = org.max_users 
+                      ? `(${org.userCount}/${org.max_users} users)` 
+                      : `(${org.userCount} users)`;
+                    const atLimit = org.max_users && (org.userCount + selectedCount) > org.max_users;
+                    return (
+                      <SelectItem key={org.id} value={org.id}>
+                        <span className={atLimit ? 'text-destructive' : ''}>
+                          {org.name} {limitInfo} {atLimit && '⚠️'}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              {wouldExceedLimit && (
+                <p className="text-sm text-destructive">
+                  Warning: This would exceed the organization's user limit of {selectedOrg?.max_users}.
+                </p>
+              )}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setAssignOrgId('')}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={!assignOrgId || wouldExceedLimit}
+                onClick={() => {
+                  onBulkAssignOrg(assignOrgId === 'none' ? null : assignOrgId);
+                  setAssignOrgId('');
+                }}
+              >
+                {assignOrgId === 'none' ? 'Remove from Organization' : 'Assign to Organization'}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

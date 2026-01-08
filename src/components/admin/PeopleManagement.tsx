@@ -20,6 +20,13 @@ interface Course {
   title: string;
 }
 
+interface OrganizationWithCount {
+  id: string;
+  name: string;
+  max_users: number | null;
+  userCount: number;
+}
+
 export function PeopleManagement() {
   const [nameFilter, setNameFilter] = useState('');
   const [organizationFilter, setOrganizationFilter] = useState<string>('all');
@@ -44,6 +51,40 @@ export function PeopleManagement() {
       if (error) throw error;
       return data as Course[];
     },
+  });
+
+  // Fetch organizations with user counts for bulk assignment
+  const { data: organizationsForBulk = [] } = useQuery({
+    queryKey: ['admin-organizations-bulk'],
+    queryFn: async () => {
+      const { data: orgs, error } = await supabase
+        .from('organizations')
+        .select('id, name, max_users')
+        .eq('active', true)
+        .order('name');
+      
+      if (error) throw error;
+
+      // Get user counts per organization
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('organization_id');
+
+      const orgCounts = new Map<string, number>();
+      profiles?.forEach(p => {
+        if (p.organization_id) {
+          orgCounts.set(p.organization_id, (orgCounts.get(p.organization_id) || 0) + 1);
+        }
+      });
+
+      return (orgs || []).map(org => ({
+        id: org.id,
+        name: org.name,
+        max_users: org.max_users,
+        userCount: orgCounts.get(org.id) || 0,
+      })) as OrganizationWithCount[];
+    },
+    enabled: isSuperAdmin,
   });
 
   // Fetch all learners with their progress
@@ -404,6 +445,42 @@ export function PeopleManagement() {
     }
   };
 
+  const handleBulkAssignOrg = async (orgId: string | null) => {
+    setIsProcessingBulk(true);
+    const userIds = Array.from(selectedUserIds);
+    
+    try {
+      // Get org name if assigning to an organization
+      const orgName = orgId ? organizationsForBulk.find(o => o.id === orgId)?.name : null;
+
+      // Update profiles with new organization
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          organization_id: orgId, 
+          organization: orgName 
+        })
+        .in('id', userIds);
+
+      if (error) throw error;
+
+      if (orgId) {
+        toast.success(`Assigned ${userIds.length} user${userIds.length > 1 ? 's' : ''} to ${orgName}`);
+      } else {
+        toast.success(`Removed ${userIds.length} user${userIds.length > 1 ? 's' : ''} from organization`);
+      }
+
+      setSelectedUserIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-organizations-bulk'] });
+    } catch (err) {
+      console.error('Error assigning organization:', err);
+      toast.error('Failed to assign organization');
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
+
   const totalLearners = filteredLearners.length;
   const completedLearners = filteredLearners.filter(l => l.completion_percentage === 100).length;
   const certificatesIssued = filteredLearners.filter(l => l.certificate_id).length;
@@ -417,7 +494,9 @@ export function PeopleManagement() {
         onBulkDelete={handleBulkDelete}
         onBulkResetProgress={handleBulkResetProgress}
         onBulkEnroll={handleBulkEnroll}
+        onBulkAssignOrg={handleBulkAssignOrg}
         courses={courses}
+        organizations={organizationsForBulk}
         canDeleteUsers={canDeleteUsers}
         isProcessing={isProcessingBulk}
       />
