@@ -110,7 +110,7 @@ export function UserInvitations() {
     },
   });
 
-  // Resend invitation mutation (extends expiry and resets status)
+  // Resend invitation mutation (extends expiry and resets status, then sends email)
   const resendMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       const newExpiry = new Date();
@@ -125,10 +125,27 @@ export function UserInvitations() {
         .in('id', ids);
       
       if (error) throw error;
+
+      // Send invitation emails
+      const appUrl = window.location.origin;
+      
+      try {
+        const { error: emailError } = await supabase.functions.invoke('send-invitation', {
+          body: { invitationIds: ids, appUrl },
+        });
+        
+        if (emailError) {
+          console.error('Failed to send invitation emails:', emailError);
+          throw new Error('Failed to send invitation emails');
+        }
+      } catch (emailErr) {
+        console.error('Error calling send-invitation function:', emailErr);
+        throw emailErr;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
-      toast.success(`${selectedInvitations.length} invitation(s) renewed`);
+      toast.success(`${selectedInvitations.length} invitation(s) renewed and emails sent`);
       setSelectedInvitations([]);
     },
     onError: (error: Error) => {

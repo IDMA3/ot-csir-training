@@ -168,17 +168,37 @@ export function BulkUserImport() {
         status: 'pending',
       }));
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('user_invitations')
-        .insert(invitations);
+        .insert(invitations)
+        .select('id');
 
       if (error) throw error;
+      
+      // Send invitation emails
+      if (data && data.length > 0) {
+        const invitationIds = data.map(inv => inv.id);
+        const appUrl = window.location.origin;
+        
+        try {
+          const { error: emailError } = await supabase.functions.invoke('send-invitation', {
+            body: { invitationIds, appUrl },
+          });
+          
+          if (emailError) {
+            console.error('Failed to send invitation emails:', emailError);
+            toast.warning('Invitations created but some emails may not have been sent');
+          }
+        } catch (emailErr) {
+          console.error('Error calling send-invitation function:', emailErr);
+        }
+      }
       
       return invitations.length;
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['admin-invitations'] });
-      toast.success(`${count} invitation(s) created`);
+      toast.success(`${count} invitation(s) created and emails sent`);
       setImportStep('complete');
     },
     onError: (error: Error) => {
