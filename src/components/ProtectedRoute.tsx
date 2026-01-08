@@ -1,5 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
@@ -8,8 +9,11 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { user, isAdmin, isLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const { hasAdminAccess, isLoading: permissionsLoading } = useAdminPermissions();
   const location = useLocation();
+
+  const isLoading = authLoading || (requireAdmin && permissionsLoading);
 
   if (isLoading) {
     return (
@@ -23,7 +27,7 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  if (requireAdmin && !isAdmin) {
+  if (requireAdmin && !hasAdminAccess) {
     return <Navigate to="/dashboard" replace />;
   }
 

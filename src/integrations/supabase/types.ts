@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_permissions: {
+        Row: {
+          can_manage_courses: boolean
+          can_manage_users: boolean
+          can_view_courses: boolean
+          can_view_users: boolean
+          created_at: string
+          id: string
+          is_super_admin: boolean
+          organization_scope: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_manage_courses?: boolean
+          can_manage_users?: boolean
+          can_view_courses?: boolean
+          can_view_users?: boolean
+          created_at?: string
+          id?: string
+          is_super_admin?: boolean
+          organization_scope?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_manage_courses?: boolean
+          can_manage_users?: boolean
+          can_view_courses?: boolean
+          can_view_users?: boolean
+          created_at?: string
+          id?: string
+          is_super_admin?: boolean
+          organization_scope?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       attempts: {
         Row: {
           answers: Json
@@ -98,6 +137,7 @@ export type Database = {
           description: string | null
           duration_minutes: number
           id: string
+          organization: string | null
           title: string
           version: string
         }
@@ -108,6 +148,7 @@ export type Database = {
           description?: string | null
           duration_minutes: number
           id?: string
+          organization?: string | null
           title: string
           version: string
         }
@@ -118,6 +159,7 @@ export type Database = {
           description?: string | null
           duration_minutes?: number
           id?: string
+          organization?: string | null
           title?: string
           version?: string
         }
@@ -319,6 +361,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_manage_org_courses: {
+        Args: { check_org: string; check_user_id: string }
+        Returns: boolean
+      }
+      can_view_org_users: {
+        Args: { check_org: string; check_user_id: string }
+        Returns: boolean
+      }
+      has_admin_access: { Args: { check_user_id: string }; Returns: boolean }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -326,6 +377,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_super_admin: { Args: { check_user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "learner" | "admin"
