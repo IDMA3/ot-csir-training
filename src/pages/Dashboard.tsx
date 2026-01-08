@@ -93,6 +93,7 @@ export default function Dashboard() {
             isModuleUnlocked={checkUnlocked}
             progressPercentage={progressPercentage}
             courseDuration={course?.duration_minutes || 15}
+            courseTitle={course?.title}
           />
         </div>
 

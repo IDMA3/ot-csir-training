@@ -10,12 +10,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield, BookOpen } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield, BookOpen, BarChart3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
 import { CourseManagement } from '@/components/admin/CourseManagement';
 import { CourseAssignment } from '@/components/admin/CourseAssignment';
+import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard';
 
 interface Course {
   id: string;
@@ -251,10 +252,14 @@ export default function Admin() {
         </div>
 
         <Tabs defaultValue="reports" className="space-y-6">
-          <TabsList>
+          <TabsList className="flex-wrap">
             <TabsTrigger value="reports" className="gap-2">
               <GraduationCap className="h-4 w-4" />
               Learner Reports
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Analytics
             </TabsTrigger>
             <TabsTrigger value="courses" className="gap-2">
               <BookOpen className="h-4 w-4" />
@@ -411,6 +416,10 @@ export default function Admin() {
                 />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <AnalyticsDashboard />
           </TabsContent>
 
           <TabsContent value="courses" className="space-y-6">
