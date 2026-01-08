@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
+import { BulkActionsBar } from '@/components/admin/BulkActionsBar';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 import { toast } from 'sonner';
 
@@ -26,6 +27,8 @@ export function PeopleManagement() {
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   
   const { isSuperAdmin, organizationScope, canDeleteUsers } = useAdminPermissions();
   const queryClient = useQueryClient();
@@ -252,12 +255,173 @@ export function PeopleManagement() {
     }
   };
 
+  // Selection handlers
+  const handleSelectionChange = (userId: string, selected: boolean) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(userId);
+      } else {
+        next.delete(userId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = (selected: boolean) => {
+    if (selected) {
+      setSelectedUserIds(new Set(filteredLearners.map(l => l.id)));
+    } else {
+      setSelectedUserIds(new Set());
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedUserIds(new Set());
+  };
+
+  // Bulk actions
+  const handleBulkDelete = async () => {
+    setIsProcessingBulk(true);
+    const userIds = Array.from(selectedUserIds);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const userId of userIds) {
+      try {
+        const { data, error } = await supabase.functions.invoke('delete-user', {
+          body: { userId },
+        });
+
+        if (error || data?.error) {
+          failCount++;
+        } else {
+          successCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`Deleted ${successCount} user${successCount > 1 ? 's' : ''}`);
+    }
+    if (failCount > 0) {
+      toast.error(`Failed to delete ${failCount} user${failCount > 1 ? 's' : ''}`);
+    }
+
+    setSelectedUserIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    setIsProcessingBulk(false);
+  };
+
+  const handleBulkResetProgress = async (courseId?: string) => {
+    setIsProcessingBulk(true);
+    const userIds = Array.from(selectedUserIds);
+    
+    try {
+      // Get modules for the course filter
+      let moduleIds: string[] = [];
+      if (courseId) {
+        const { data: modules } = await supabase
+          .from('modules')
+          .select('id')
+          .eq('course_id', courseId);
+        moduleIds = modules?.map(m => m.id) || [];
+      }
+
+      // Delete progress records
+      let progressQuery = supabase.from('progress').delete().in('user_id', userIds);
+      if (moduleIds.length > 0) {
+        progressQuery = progressQuery.in('module_id', moduleIds);
+      }
+      await progressQuery;
+
+      // Delete attempt records
+      let attemptsQuery = supabase.from('attempts').delete().in('user_id', userIds);
+      if (moduleIds.length > 0) {
+        attemptsQuery = attemptsQuery.in('module_id', moduleIds);
+      }
+      await attemptsQuery;
+
+      // Delete certificates if resetting specific course
+      if (courseId) {
+        await supabase.from('certificates').delete().in('user_id', userIds).eq('course_id', courseId);
+      } else {
+        await supabase.from('certificates').delete().in('user_id', userIds);
+      }
+
+      toast.success(`Reset progress for ${userIds.length} user${userIds.length > 1 ? 's' : ''}`);
+      setSelectedUserIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    } catch (err) {
+      console.error('Error resetting progress:', err);
+      toast.error('Failed to reset progress');
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
+
+  const handleBulkEnroll = async (courseId: string) => {
+    setIsProcessingBulk(true);
+    const userIds = Array.from(selectedUserIds);
+    
+    try {
+      // Get existing enrollments to avoid duplicates
+      const { data: existingEnrollments } = await supabase
+        .from('enrollments')
+        .select('user_id')
+        .eq('course_id', courseId)
+        .in('user_id', userIds);
+
+      const existingUserIds = new Set(existingEnrollments?.map(e => e.user_id) || []);
+      const newEnrollments = userIds
+        .filter(id => !existingUserIds.has(id))
+        .map(user_id => ({ user_id, course_id: courseId }));
+
+      if (newEnrollments.length > 0) {
+        const { error } = await supabase.from('enrollments').insert(newEnrollments);
+        if (error) throw error;
+      }
+
+      const courseName = courses.find(c => c.id === courseId)?.title || 'course';
+      const alreadyEnrolled = userIds.length - newEnrollments.length;
+      
+      if (newEnrollments.length > 0) {
+        toast.success(`Enrolled ${newEnrollments.length} user${newEnrollments.length > 1 ? 's' : ''} in ${courseName}`);
+      }
+      if (alreadyEnrolled > 0) {
+        toast.info(`${alreadyEnrolled} user${alreadyEnrolled > 1 ? 's were' : ' was'} already enrolled`);
+      }
+
+      setSelectedUserIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    } catch (err) {
+      console.error('Error enrolling users:', err);
+      toast.error('Failed to enroll users');
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
+
   const totalLearners = filteredLearners.length;
   const completedLearners = filteredLearners.filter(l => l.completion_percentage === 100).length;
   const certificatesIssued = filteredLearners.filter(l => l.certificate_id).length;
 
   return (
     <div className="space-y-6">
+      {/* Bulk Actions Bar */}
+      <BulkActionsBar
+        selectedCount={selectedUserIds.size}
+        onClearSelection={clearSelection}
+        onBulkDelete={handleBulkDelete}
+        onBulkResetProgress={handleBulkResetProgress}
+        onBulkEnroll={handleBulkEnroll}
+        courses={courses}
+        canDeleteUsers={canDeleteUsers}
+        isProcessing={isProcessingBulk}
+      />
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
@@ -398,6 +562,10 @@ export function PeopleManagement() {
             canDeleteUsers={canDeleteUsers}
             onDeleteUser={handleDeleteUser}
             deletingUserId={deletingUserId}
+            selectedUserIds={selectedUserIds}
+            onSelectionChange={handleSelectionChange}
+            onSelectAll={handleSelectAll}
+            showSelection={true}
           />
         </CardContent>
       </Card>
