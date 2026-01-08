@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, BookOpen, Loader2, Layers } from 'lucide-react';
+import { Plus, Pencil, BookOpen, Loader2, Layers, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleEditor } from './ModuleEditor';
 
@@ -105,6 +105,102 @@ export function CourseManagement() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to update course: ${error.message}`);
+    },
+  });
+
+  const duplicateMutation = useMutation({
+    mutationFn: async (courseId: string) => {
+      // 1. Fetch the original course
+      const { data: originalCourse, error: courseError } = await supabase
+        .from('course')
+        .select('*')
+        .eq('id', courseId)
+        .single();
+      
+      if (courseError) throw courseError;
+
+      // 2. Create the new course (as inactive draft)
+      const { data: newCourse, error: newCourseError } = await supabase
+        .from('course')
+        .insert({
+          title: `${originalCourse.title} (Copy)`,
+          description: originalCourse.description,
+          category: originalCourse.category,
+          duration_minutes: originalCourse.duration_minutes,
+          version: originalCourse.version,
+          active: false, // Start as inactive draft
+        })
+        .select()
+        .single();
+
+      if (newCourseError) throw newCourseError;
+
+      // 3. Fetch and duplicate modules
+      const { data: originalModules, error: modulesError } = await supabase
+        .from('modules')
+        .select('*')
+        .eq('course_id', courseId)
+        .order('sequence');
+
+      if (modulesError) throw modulesError;
+
+      if (originalModules && originalModules.length > 0) {
+        // Create mapping of old module IDs to new module IDs
+        const moduleIdMap = new Map<string, string>();
+
+        for (const module of originalModules) {
+          const { data: newModule, error: newModuleError } = await supabase
+            .from('modules')
+            .insert({
+              course_id: newCourse.id,
+              title: module.title,
+              body_html: module.body_html,
+              sequence: module.sequence,
+              type: module.type,
+              estimated_minutes: module.estimated_minutes,
+            })
+            .select()
+            .single();
+
+          if (newModuleError) throw newModuleError;
+          moduleIdMap.set(module.id, newModule.id);
+        }
+
+        // 4. Fetch and duplicate questions for all modules
+        const { data: originalQuestions, error: questionsError } = await supabase
+          .from('questions')
+          .select('*')
+          .in('module_id', originalModules.map(m => m.id))
+          .order('sequence');
+
+        if (questionsError) throw questionsError;
+
+        if (originalQuestions && originalQuestions.length > 0) {
+          const newQuestions = originalQuestions.map(q => ({
+            module_id: moduleIdMap.get(q.module_id)!,
+            prompt: q.prompt,
+            choices: q.choices,
+            correct_choice: q.correct_choice,
+            rationale: q.rationale,
+            sequence: q.sequence,
+          }));
+
+          const { error: insertQuestionsError } = await supabase
+            .from('questions')
+            .insert(newQuestions);
+
+          if (insertQuestionsError) throw insertQuestionsError;
+        }
+      }
+
+      return newCourse;
+    },
+    onSuccess: (newCourse) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      toast.success(`Course duplicated! "${newCourse.title}" created as inactive draft.`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to duplicate course: ${error.message}`);
     },
   });
 
@@ -322,7 +418,20 @@ export function CourseManagement() {
                       >
                         <Layers className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(course)}>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => duplicateMutation.mutate(course.id)}
+                        disabled={duplicateMutation.isPending}
+                        title="Duplicate Course"
+                      >
+                        {duplicateMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(course)} title="Edit Course">
                         <Pencil className="h-4 w-4" />
                       </Button>
                     </div>
