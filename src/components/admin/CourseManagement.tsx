@@ -34,9 +34,14 @@ interface Course {
   version: string;
   active: boolean;
   created_at: string;
+  organization: string | null;
 }
 
-export function CourseManagement() {
+interface CourseManagementProps {
+  organizationScope?: string | null;
+}
+
+export function CourseManagement({ organizationScope }: CourseManagementProps) {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -52,15 +57,23 @@ export function CourseManagement() {
     duration_minutes: 15,
     version: '1.0',
     active: true,
+    organization: '',
   });
 
   const { data: courses = [], isLoading } = useQuery({
-    queryKey: ['admin-courses'],
+    queryKey: ['admin-courses', organizationScope],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('course')
         .select('*')
         .order('created_at', { ascending: false });
+      
+      // Filter by organization for non-super admins
+      if (organizationScope) {
+        query = query.eq('organization', organizationScope);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data as Course[];
     },
@@ -75,6 +88,7 @@ export function CourseManagement() {
         duration_minutes: data.duration_minutes,
         version: data.version,
         active: data.active,
+        organization: data.organization || organizationScope || null,
       });
       if (error) throw error;
     },
@@ -99,6 +113,7 @@ export function CourseManagement() {
           duration_minutes: data.duration_minutes,
           version: data.version,
           active: data.active,
+          organization: data.organization || null,
         })
         .eq('id', id);
       if (error) throw error;
@@ -285,6 +300,7 @@ export function CourseManagement() {
       duration_minutes: 15,
       version: '1.0',
       active: true,
+      organization: organizationScope || '',
     });
     setEditingCourse(null);
     setIsDialogOpen(false);
@@ -299,6 +315,7 @@ export function CourseManagement() {
       duration_minutes: course.duration_minutes,
       version: course.version,
       active: course.active,
+      organization: course.organization || '',
     });
     setIsDialogOpen(true);
   };

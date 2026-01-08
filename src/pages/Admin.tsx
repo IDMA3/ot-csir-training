@@ -10,13 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield, BookOpen, BarChart3 } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield, BookOpen, BarChart3, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
+import { AdminPermissionManager } from '@/components/admin/AdminPermissionManager';
 import { CourseManagement } from '@/components/admin/CourseManagement';
 import { CourseAssignment } from '@/components/admin/CourseAssignment';
 import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 
 interface Course {
   id: string;
@@ -29,6 +31,16 @@ export default function Admin() {
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  
+  const { 
+    isSuperAdmin, 
+    organizationScope, 
+    canAccessLearnerReports, 
+    canAccessAnalytics, 
+    canAccessCourses, 
+    canAccessAdminManagement,
+    canManageCourses,
+  } = useAdminPermissions();
 
   // Fetch all courses for filter dropdown
   const { data: courses = [] } = useQuery({
@@ -159,17 +171,23 @@ export default function Admin() {
     },
   });
 
+  // Filter learners by organization scope for non-super admins
+  const scopedLearners = useMemo(() => {
+    if (isSuperAdmin || !organizationScope) return learners;
+    return learners.filter(l => l.organization === organizationScope);
+  }, [learners, isSuperAdmin, organizationScope]);
+
   // Get unique organizations for filter dropdown
   const organizations = useMemo(() => {
-    const orgs = learners
+    const orgs = scopedLearners
       .map(l => l.organization)
       .filter((org): org is string => !!org);
     return [...new Set(orgs)].sort();
-  }, [learners]);
+  }, [scopedLearners]);
 
   // Apply all filters
   const filteredLearners = useMemo(() => {
-    return learners.filter(l => {
+    return scopedLearners.filter(l => {
       // Name filter
       if (nameFilter) {
         const nameLower = nameFilter.toLowerCase();
@@ -251,24 +269,32 @@ export default function Admin() {
           <p className="text-muted-foreground mt-1">Manage learners, reports, and administrator access</p>
         </div>
 
-        <Tabs defaultValue="reports" className="space-y-6">
+        <Tabs defaultValue={canAccessLearnerReports ? "reports" : canAccessCourses ? "courses" : "admins"} className="space-y-6">
           <TabsList className="flex-wrap">
-            <TabsTrigger value="reports" className="gap-2">
-              <GraduationCap className="h-4 w-4" />
-              Learner Reports
-            </TabsTrigger>
-            <TabsTrigger value="analytics" className="gap-2">
-              <BarChart3 className="h-4 w-4" />
-              Analytics
-            </TabsTrigger>
-            <TabsTrigger value="courses" className="gap-2">
-              <BookOpen className="h-4 w-4" />
-              Courses
-            </TabsTrigger>
-            <TabsTrigger value="admins" className="gap-2">
-              <Shield className="h-4 w-4" />
-              Admin Access
-            </TabsTrigger>
+            {canAccessLearnerReports && (
+              <TabsTrigger value="reports" className="gap-2">
+                <GraduationCap className="h-4 w-4" />
+                Learner Reports
+              </TabsTrigger>
+            )}
+            {canAccessAnalytics && (
+              <TabsTrigger value="analytics" className="gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Analytics
+              </TabsTrigger>
+            )}
+            {canAccessCourses && (
+              <TabsTrigger value="courses" className="gap-2">
+                <BookOpen className="h-4 w-4" />
+                Courses
+              </TabsTrigger>
+            )}
+            {canAccessAdminManagement && (
+              <TabsTrigger value="admins" className="gap-2">
+                <Crown className="h-4 w-4" />
+                Permissions
+              </TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="reports" className="space-y-6">
@@ -423,12 +449,12 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="courses" className="space-y-6">
-            <CourseAssignment />
-            <CourseManagement />
+            {isSuperAdmin && <CourseAssignment />}
+            <CourseManagement organizationScope={isSuperAdmin ? null : organizationScope} />
           </TabsContent>
 
           <TabsContent value="admins">
-            <AdminUserManagement />
+            <AdminPermissionManager />
           </TabsContent>
         </Tabs>
       </main>
