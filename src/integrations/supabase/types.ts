@@ -261,6 +261,7 @@ export type Database = {
           module_id: string
           prompt: string
           rationale: string | null
+          sequence: number
         }
         Insert: {
           choices: Json
@@ -270,6 +271,7 @@ export type Database = {
           module_id: string
           prompt: string
           rationale?: string | null
+          sequence?: number
         }
         Update: {
           choices?: Json
@@ -279,6 +281,7 @@ export type Database = {
           module_id?: string
           prompt?: string
           rationale?: string | null
+          sequence?: number
         }
         Relationships: [
           {
