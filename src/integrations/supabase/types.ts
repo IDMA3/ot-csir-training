@@ -235,13 +235,46 @@ export type Database = {
           },
         ]
       }
+      organization_courses: {
+        Row: {
+          course_id: string
+          created_at: string
+          id: string
+          organization_id: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_courses_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           active: boolean
           created_at: string
           description: string | null
           id: string
+          logo_url: string | null
+          max_users: number | null
           name: string
+          primary_color: string | null
+          settings: Json | null
           updated_at: string
         }
         Insert: {
@@ -249,7 +282,11 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          logo_url?: string | null
+          max_users?: number | null
           name: string
+          primary_color?: string | null
+          settings?: Json | null
           updated_at?: string
         }
         Update: {
@@ -257,7 +294,11 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          logo_url?: string | null
+          max_users?: number | null
           name?: string
+          primary_color?: string | null
+          settings?: Json | null
           updated_at?: string
         }
         Relationships: []
