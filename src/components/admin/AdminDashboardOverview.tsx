@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, Building2, BookOpen, Award, UserPlus, PlusCircle, Mail, ArrowRight } from 'lucide-react';
+import { Users, Building2, BookOpen, Award, UserPlus, PlusCircle, ArrowRight } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface AdminDashboardOverviewProps {
@@ -78,7 +78,7 @@ export function AdminDashboardOverview({ onNavigate }: AdminDashboardOverviewPro
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('reports')}>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('people')}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total Users</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
@@ -89,7 +89,7 @@ export function AdminDashboardOverview({ onNavigate }: AdminDashboardOverviewPro
           </CardContent>
         </Card>
         
-        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('orgs')}>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => onNavigate('organizations')}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Organizations</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -131,21 +131,21 @@ export function AdminDashboardOverview({ onNavigate }: AdminDashboardOverviewPro
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={() => onNavigate('orgs', 'import')} variant="outline">
+            <Button onClick={() => onNavigate('onboard')} variant="outline">
               <UserPlus className="h-4 w-4 mr-2" />
-              Import Users
+              Add Users
             </Button>
-            <Button onClick={() => onNavigate('orgs', 'invitations')} variant="outline">
-              <Mail className="h-4 w-4 mr-2" />
-              Send Invitations
+            <Button onClick={() => onNavigate('people')} variant="outline">
+              <Users className="h-4 w-4 mr-2" />
+              View People
             </Button>
             <Button onClick={() => onNavigate('courses')} variant="outline">
               <PlusCircle className="h-4 w-4 mr-2" />
               Manage Courses
             </Button>
-            <Button onClick={() => onNavigate('orgs', 'organizations')} variant="outline">
+            <Button onClick={() => onNavigate('organizations')} variant="outline">
               <Building2 className="h-4 w-4 mr-2" />
-              Manage Organizations
+              Organizations
             </Button>
           </div>
         </CardContent>
@@ -160,7 +160,7 @@ export function AdminDashboardOverview({ onNavigate }: AdminDashboardOverviewPro
               <CardTitle className="text-base">Recent Signups</CardTitle>
               <CardDescription>Latest user registrations</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate('reports')}>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate('people')}>
               View all
               <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
@@ -193,7 +193,7 @@ export function AdminDashboardOverview({ onNavigate }: AdminDashboardOverviewPro
               <CardTitle className="text-base">Recent Certificates</CardTitle>
               <CardDescription>Latest certifications earned</CardDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => onNavigate('reports')}>
+            <Button variant="ghost" size="sm" onClick={() => onNavigate('people')}>
               View all
               <ArrowRight className="h-4 w-4 ml-1" />
             </Button>
