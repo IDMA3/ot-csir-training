@@ -1,6 +1,7 @@
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -37,6 +38,10 @@ interface LearnerReportTableProps {
   canDeleteUsers?: boolean;
   onDeleteUser?: (userId: string, userName: string) => void;
   deletingUserId?: string | null;
+  selectedUserIds?: Set<string>;
+  onSelectionChange?: (userId: string, selected: boolean) => void;
+  onSelectAll?: (selected: boolean) => void;
+  showSelection?: boolean;
 }
 
 export function LearnerReportTable({ 
@@ -47,10 +52,18 @@ export function LearnerReportTable({
   canDeleteUsers = false,
   onDeleteUser,
   deletingUserId,
+  selectedUserIds = new Set(),
+  onSelectionChange,
+  onSelectAll,
+  showSelection = false,
 }: LearnerReportTableProps) {
   const selectedCourseName = courseFilter && courseFilter !== 'all' 
     ? courses.find(c => c.id === courseFilter)?.title 
     : null;
+
+  const allSelected = learners.length > 0 && learners.every(l => selectedUserIds.has(l.id));
+  const someSelected = learners.some(l => selectedUserIds.has(l.id)) && !allSelected;
+
   if (isLoading) {
     return <div className="text-center py-8 text-muted-foreground">Loading...</div>;
   }
@@ -64,6 +77,15 @@ export function LearnerReportTable({
       <Table>
         <TableHeader>
           <TableRow>
+            {showSelection && (
+              <TableHead className="w-[50px]">
+                <Checkbox 
+                  checked={allSelected ? true : someSelected ? 'indeterminate' : false}
+                  onCheckedChange={(checked) => onSelectAll?.(checked === true)}
+                  aria-label="Select all"
+                />
+              </TableHead>
+            )}
             <TableHead>Name</TableHead>
             <TableHead>Email</TableHead>
             <TableHead>Organization</TableHead>
@@ -71,124 +93,139 @@ export function LearnerReportTable({
             <TableHead>Exam Score</TableHead>
             <TableHead>Certificate</TableHead>
             <TableHead>Completed</TableHead>
-            <TableHead className="w-[80px]">Details</TableHead>
+            <TableHead className="w-[80px]">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {learners.map((learner) => (
-            <TableRow key={learner.id}>
-              <TableCell className="font-medium">
-                {learner.first_name} {learner.last_name}
-                {learner.job_role && (
-                  <span className="block text-xs text-muted-foreground">{learner.job_role}</span>
-                )}
-              </TableCell>
-              <TableCell className="text-sm">{learner.email}</TableCell>
-              <TableCell>{learner.organization || '-'}</TableCell>
-              <TableCell>
-                <div className="flex items-center gap-2">
-                  <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-primary transition-all"
-                      style={{ width: `${learner.completion_percentage}%` }}
+          {learners.map((learner) => {
+            const isSelected = selectedUserIds.has(learner.id);
+            return (
+              <TableRow 
+                key={learner.id}
+                className={isSelected ? 'bg-muted/50' : undefined}
+              >
+                {showSelection && (
+                  <TableCell>
+                    <Checkbox 
+                      checked={isSelected}
+                      onCheckedChange={(checked) => onSelectionChange?.(learner.id, checked === true)}
+                      aria-label={`Select ${learner.first_name} ${learner.last_name}`}
                     />
-                  </div>
-                  <span className="text-sm">{learner.completion_percentage}%</span>
-                </div>
-              </TableCell>
-              <TableCell>
-                {learner.best_exam_score !== null ? (
-                  <Badge variant={learner.best_exam_score >= 0.8 ? "default" : "secondary"}>
-                    {Math.round(learner.best_exam_score * 100)}%
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
+                  </TableCell>
                 )}
-              </TableCell>
-              <TableCell>
-                {learner.certificate_id ? (
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {learner.certificate_id}
-                  </Badge>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
-                )}
-              </TableCell>
-              <TableCell>
-                {learner.completion_date ? (
-                  format(new Date(learner.completion_date), 'MMM d, yyyy')
-                ) : (
-                  <span className="text-muted-foreground">In progress</span>
-                )}
-              </TableCell>
-              <TableCell>
-                <div className="flex items-center gap-1">
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                      <DialogHeader>
-                        <DialogTitle>
-                          {learner.first_name} {learner.last_name}
-                        </DialogTitle>
-                      </DialogHeader>
-                      <LearnerDetailView userId={learner.id} learner={learner} />
-                    </DialogContent>
-                  </Dialog>
-                  
-                  {canDeleteUsers && onDeleteUser && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                          disabled={deletingUserId === learner.id}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete User</AlertDialogTitle>
-                          <AlertDialogDescription className="space-y-2">
-                            <p>
-                              Are you sure you want to permanently delete{' '}
-                              <strong>{learner.first_name} {learner.last_name}</strong>?
-                            </p>
-                            <p className="text-sm">
-                              This will remove all their data including:
-                            </p>
-                            <ul className="text-sm list-disc list-inside">
-                              <li>Profile information</li>
-                              <li>Course progress ({learner.modules_completed} modules)</li>
-                              <li>Exam attempts</li>
-                              {learner.certificate_id && <li>Certificates</li>}
-                            </ul>
-                            <p className="text-destructive font-medium mt-2">
-                              This action cannot be undone.
-                            </p>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            onClick={() => onDeleteUser(learner.id, `${learner.first_name} ${learner.last_name}`)}
-                          >
-                            Delete User
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                <TableCell className="font-medium">
+                  {learner.first_name} {learner.last_name}
+                  {learner.job_role && (
+                    <span className="block text-xs text-muted-foreground">{learner.job_role}</span>
                   )}
-                </div>
-              </TableCell>
-            </TableRow>
-          ))}
+                </TableCell>
+                <TableCell className="text-sm">{learner.email}</TableCell>
+                <TableCell>{learner.organization || '-'}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${learner.completion_percentage}%` }}
+                      />
+                    </div>
+                    <span className="text-sm">{learner.completion_percentage}%</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  {learner.best_exam_score !== null ? (
+                    <Badge variant={learner.best_exam_score >= 0.8 ? "default" : "secondary"}>
+                      {Math.round(learner.best_exam_score * 100)}%
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {learner.certificate_id ? (
+                    <Badge variant="outline" className="font-mono text-xs">
+                      {learner.certificate_id}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {learner.completion_date ? (
+                    format(new Date(learner.completion_date), 'MMM d, yyyy')
+                  ) : (
+                    <span className="text-muted-foreground">In progress</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                        <DialogHeader>
+                          <DialogTitle>
+                            {learner.first_name} {learner.last_name}
+                          </DialogTitle>
+                        </DialogHeader>
+                        <LearnerDetailView userId={learner.id} learner={learner} />
+                      </DialogContent>
+                    </Dialog>
+                    
+                    {canDeleteUsers && onDeleteUser && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={deletingUserId === learner.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete User</AlertDialogTitle>
+                            <AlertDialogDescription className="space-y-2">
+                              <p>
+                                Are you sure you want to permanently delete{' '}
+                                <strong>{learner.first_name} {learner.last_name}</strong>?
+                              </p>
+                              <p className="text-sm">
+                                This will remove all their data including:
+                              </p>
+                              <ul className="text-sm list-disc list-inside">
+                                <li>Profile information</li>
+                                <li>Course progress ({learner.modules_completed} modules)</li>
+                                <li>Exam attempts</li>
+                                {learner.certificate_id && <li>Certificates</li>}
+                              </ul>
+                              <p className="text-destructive font-medium mt-2">
+                                This action cannot be undone.
+                              </p>
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => onDeleteUser(learner.id, `${learner.first_name} ${learner.last_name}`)}
+                            >
+                              Delete User
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </TableCell>
+              </TableRow>
+            );
+          })}
         </TableBody>
       </Table>
     </div>
