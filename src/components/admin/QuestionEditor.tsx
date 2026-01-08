@@ -763,23 +763,29 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
                           <p className="font-medium">{question.prompt}</p>
                         </div>
                         <div className="grid gap-1 ml-8">
-                          {Object.entries(choices).map(([letter, text]) => (
-                            <div
-                              key={letter}
-                              className={`flex items-center gap-2 text-sm ${
-                                letter === question.correct_choice
-                                  ? 'text-green-600 dark:text-green-400 font-medium'
-                                  : 'text-muted-foreground'
-                              }`}
-                            >
-                              {letter === question.correct_choice && (
-                                <CheckCircle2 className="h-4 w-4 shrink-0" />
-                              )}
-                              <span className={letter !== question.correct_choice ? 'ml-6' : ''}>
-                                {letter}. {text}
-                              </span>
-                            </div>
-                          ))}
+                          {Object.entries(choices).map(([letter, choiceValue]) => {
+                            // Handle both string format and object format {id, text}
+                            const text = typeof choiceValue === 'string' 
+                              ? choiceValue 
+                              : (choiceValue as { text?: string })?.text || String(choiceValue);
+                            return (
+                              <div
+                                key={letter}
+                                className={`flex items-center gap-2 text-sm ${
+                                  letter === question.correct_choice
+                                    ? 'text-green-600 dark:text-green-400 font-medium'
+                                    : 'text-muted-foreground'
+                                }`}
+                              >
+                                {letter === question.correct_choice && (
+                                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                )}
+                                <span className={letter !== question.correct_choice ? 'ml-6' : ''}>
+                                  {letter}. {text}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                         {question.rationale && (
                           <div className="ml-8 mt-2 p-2 bg-muted/50 rounded text-sm">
