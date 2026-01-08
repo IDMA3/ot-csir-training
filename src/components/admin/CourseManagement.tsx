@@ -9,9 +9,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Pencil, BookOpen, Loader2, Layers, Copy } from 'lucide-react';
+import { Plus, Pencil, BookOpen, Loader2, Layers, Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleEditor } from './ModuleEditor';
 
@@ -40,6 +41,10 @@ export function CourseManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
   const [managingModulesCourse, setManagingModulesCourse] = useState<Course | null>(null);
+  const [deletingCourse, setDeletingCourse] = useState<Course | null>(null);
+  const [deleteCheckLoading, setDeleteCheckLoading] = useState(false);
+  const [canDelete, setCanDelete] = useState(false);
+  const [enrollmentCount, setEnrollmentCount] = useState(0);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -203,6 +208,74 @@ export function CourseManagement() {
       toast.error(`Failed to duplicate course: ${error.message}`);
     },
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (courseId: string) => {
+      // Delete questions first (via modules)
+      const { data: modules } = await supabase
+        .from('modules')
+        .select('id')
+        .eq('course_id', courseId);
+
+      if (modules && modules.length > 0) {
+        const moduleIds = modules.map(m => m.id);
+        
+        // Delete questions for all modules
+        const { error: questionsError } = await supabase
+          .from('questions')
+          .delete()
+          .in('module_id', moduleIds);
+        
+        if (questionsError) throw questionsError;
+      }
+
+      // Delete modules
+      const { error: modulesError } = await supabase
+        .from('modules')
+        .delete()
+        .eq('course_id', courseId);
+
+      if (modulesError) throw modulesError;
+
+      // Delete the course
+      const { error: courseError } = await supabase
+        .from('course')
+        .delete()
+        .eq('id', courseId);
+
+      if (courseError) throw courseError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-courses'] });
+      toast.success('Course deleted successfully');
+      setDeletingCourse(null);
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete course: ${error.message}`);
+    },
+  });
+
+  const handleDeleteClick = async (course: Course) => {
+    setDeletingCourse(course);
+    setDeleteCheckLoading(true);
+    
+    // Check if course has enrollments
+    const { count, error } = await supabase
+      .from('enrollments')
+      .select('id', { count: 'exact', head: true })
+      .eq('course_id', course.id);
+
+    setDeleteCheckLoading(false);
+    
+    if (error) {
+      toast.error('Failed to check enrollments');
+      setDeletingCourse(null);
+      return;
+    }
+
+    setEnrollmentCount(count || 0);
+    setCanDelete((count || 0) === 0);
+  };
 
   const resetForm = () => {
     setFormData({
@@ -434,6 +507,15 @@ export function CourseManagement() {
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(course)} title="Edit Course">
                         <Pencil className="h-4 w-4" />
                       </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDeleteClick(course)}
+                        title="Delete Course"
+                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -442,6 +524,54 @@ export function CourseManagement() {
           </Table>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deletingCourse} onOpenChange={(open) => !open && setDeletingCourse(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Course</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+                {deleteCheckLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Checking enrollments...
+                  </div>
+                ) : canDelete ? (
+                  <p>
+                    Are you sure you want to delete <strong>"{deletingCourse?.title}"</strong>? 
+                    This will permanently remove the course and all its modules and questions. 
+                    This action cannot be undone.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-destructive font-medium">
+                      This course cannot be deleted.
+                    </p>
+                    <p>
+                      <strong>"{deletingCourse?.title}"</strong> has {enrollmentCount} active enrollment{enrollmentCount !== 1 ? 's' : ''}. 
+                      You must remove all enrollments before deleting this course.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            {canDelete && !deleteCheckLoading && (
+              <AlertDialogAction
+                onClick={() => deletingCourse && deleteMutation.mutate(deletingCourse.id)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Delete Course
+              </AlertDialogAction>
+            )}
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
