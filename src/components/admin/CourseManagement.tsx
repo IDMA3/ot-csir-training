@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Plus, Pencil, BookOpen, Loader2, Layers, Copy, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModuleEditor } from './ModuleEditor';
+import { OrgCourseAccessManager } from './OrgCourseAccessManager';
 
 const COURSE_CATEGORIES = [
   'Security',
@@ -377,7 +378,11 @@ export function CourseManagement({ organizationScope }: CourseManagementProps) {
   }
 
   return (
-    <Card>
+    <div className="space-y-6">
+      {/* Org admins see the global course access manager */}
+      {!isSuperAdmin && <OrgCourseAccessManager />}
+      
+      <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -618,5 +623,6 @@ export function CourseManagement({ organizationScope }: CourseManagementProps) {
         </AlertDialogContent>
       </AlertDialog>
     </Card>
+    </div>
   );
 }
