@@ -14,6 +14,7 @@ import { LearnerReportTable, type LearnerReport } from '@/components/admin/Learn
 import { BulkActionsBar } from '@/components/admin/BulkActionsBar';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 import { toast } from 'sonner';
+import { exportToCSV } from '@/lib/csv-export';
 
 interface Course {
   id: string;
@@ -240,32 +241,26 @@ export function PeopleManagement() {
     setEndDate(undefined);
   };
 
-  const exportCSV = () => {
+  const handleExportCSV = () => {
     const selectedCourseName = courseFilter !== 'all' 
       ? courses.find(c => c.id === courseFilter)?.title || 'Unknown'
       : 'All Courses';
     
-    const headers = ['Name', 'Email', 'Organization', 'Job Role', 'Course', 'Completion %', 'Exam Score', 'Certificate ID', 'Completion Date'];
-    const rows = filteredLearners.map(l => [
-      `${l.first_name} ${l.last_name}`,
-      l.email || '',
-      l.organization || '',
-      l.job_role || '',
-      selectedCourseName,
-      `${l.completion_percentage}%`,
-      l.best_exam_score !== null ? `${Math.round(l.best_exam_score * 100)}%` : 'N/A',
-      l.certificate_id || '',
-      l.completion_date ? format(new Date(l.completion_date), 'yyyy-MM-dd') : '',
-    ]);
-
-    const csv = [headers.join(','), ...rows.map(r => r.map(cell => `"${cell}"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `training-report-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportToCSV({
+      filename: `training-report-${format(new Date(), 'yyyy-MM-dd')}`,
+      headers: ['Name', 'Email', 'Organization', 'Job Role', 'Course', 'Completion %', 'Exam Score', 'Certificate ID', 'Completion Date'],
+      rows: filteredLearners.map(l => [
+        `${l.first_name} ${l.last_name}`,
+        l.email || '',
+        l.organization || '',
+        l.job_role || '',
+        selectedCourseName,
+        `${l.completion_percentage}%`,
+        l.best_exam_score !== null ? `${Math.round(l.best_exam_score * 100)}%` : 'N/A',
+        l.certificate_id || '',
+        l.completion_date ? format(new Date(l.completion_date), 'yyyy-MM-dd') : '',
+      ]),
+    });
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
@@ -614,7 +609,7 @@ export function PeopleManagement() {
                     Clear
                   </Button>
                 )}
-                <Button onClick={exportCSV} variant="outline" size="sm">
+                <Button onClick={handleExportCSV} variant="outline" size="sm">
                   <Download className="mr-2 h-4 w-4" />
                   Export CSV
                 </Button>

@@ -4,11 +4,14 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Building2, Users, Award, TrendingUp, BookOpen, Target } from 'lucide-react';
+import { Loader2, Building2, Users, Award, TrendingUp, BookOpen, Target, Download } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { exportToCSV } from '@/lib/csv-export';
+import { format } from 'date-fns';
 
 interface OrgMetrics {
   id: string;
@@ -194,6 +197,29 @@ export function OrganizationReports() {
     ? orgMetrics 
     : orgMetrics.filter(o => o.id === selectedOrgId);
 
+  const handleExportCSV = () => {
+    const selectedOrgName = selectedOrgId === 'all' 
+      ? 'all-organizations' 
+      : orgMetrics.find(o => o.id === selectedOrgId)?.name || 'organization';
+    
+    exportToCSV({
+      filename: `org-report-${selectedOrgName.toLowerCase().replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}`,
+      headers: ['Organization', 'Users', 'Max Users', 'Active (30d)', 'Enrollments', 'Modules Completed', 'Completion Rate %', 'Avg Score %', 'Pass Rate %', 'Certificates'],
+      rows: displayedMetrics.map(org => [
+        org.name,
+        org.userCount,
+        org.maxUsers || 'Unlimited',
+        org.activeThisMonth,
+        org.enrollments,
+        org.completedModules,
+        org.completionRate.toFixed(1),
+        org.avgScore.toFixed(1),
+        org.passRate.toFixed(1),
+        org.certificates,
+      ]),
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Filter */}
@@ -202,17 +228,23 @@ export function OrganizationReports() {
           <h3 className="text-lg font-semibold">Organization Reports</h3>
           <p className="text-sm text-muted-foreground">Training metrics by organization</p>
         </div>
-        <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="All organizations" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All organizations</SelectItem>
-            {orgMetrics.map(org => (
-              <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={selectedOrgId} onValueChange={setSelectedOrgId}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All organizations" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All organizations</SelectItem>
+              {orgMetrics.map(org => (
+                <SelectItem key={org.id} value={org.id}>{org.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={handleExportCSV}>
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       {/* Summary KPIs */}

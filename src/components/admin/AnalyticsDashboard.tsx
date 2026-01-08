@@ -5,12 +5,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineCh
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays, startOfDay, endOfDay, differenceInHours, eachDayOfInterval } from 'date-fns';
-import { Loader2, TrendingUp, Clock, Target, Users, Award, BookOpen, CalendarIcon, X } from 'lucide-react';
+import { Loader2, TrendingUp, Clock, Target, Users, Award, BookOpen, CalendarIcon, X, Download, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { DateRange } from 'react-day-picker';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { exportToCSV } from '@/lib/csv-export';
 
 const PRESET_RANGES = [
   { label: 'Last 7 days', days: 7 },
@@ -295,6 +297,66 @@ export function AnalyticsDashboard() {
     setActivePreset(null);
   };
 
+  const getDateRangeLabel = () => {
+    if (activePreset !== null) {
+      return activePreset === null ? 'All time' : `Last ${activePreset} days`;
+    }
+    if (dateRange?.from && dateRange?.to) {
+      return `${format(dateRange.from, 'MMM d')} - ${format(dateRange.to, 'MMM d, yyyy')}`;
+    }
+    return 'All time';
+  };
+
+  const exportKPIs = () => {
+    if (!kpiMetrics) return;
+    exportToCSV({
+      filename: `analytics-kpis-${format(new Date(), 'yyyy-MM-dd')}`,
+      headers: ['Metric', 'Value', 'Date Range'],
+      rows: [
+        ['Average Score', `${kpiMetrics.avgScore.toFixed(1)}%`, getDateRangeLabel()],
+        ['Avg Time to Complete', formatTime(kpiMetrics.avgCompletionHours), getDateRangeLabel()],
+        ['Completion Rate', `${kpiMetrics.completionRate.toFixed(1)}%`, getDateRangeLabel()],
+        ['Active Learners', kpiMetrics.activeLearners, getDateRangeLabel()],
+        ['Pass Rate', `${kpiMetrics.passRate.toFixed(1)}%`, getDateRangeLabel()],
+        ['Modules per User', kpiMetrics.avgModulesPerUser.toFixed(1), getDateRangeLabel()],
+        ['Total Attempts', kpiMetrics.totalAttempts, getDateRangeLabel()],
+        ['Total Certificates', kpiMetrics.totalCertificates, getDateRangeLabel()],
+      ],
+    });
+  };
+
+  const exportTimeline = () => {
+    if (completionsOverTime.length === 0) return;
+    exportToCSV({
+      filename: `analytics-timeline-${format(new Date(), 'yyyy-MM-dd')}`,
+      headers: ['Date', 'Enrollments', 'Module Completions', 'Certificates Issued'],
+      rows: completionsOverTime.map(d => [
+        d.date,
+        d.enrollments,
+        d.completions,
+        d.certificates,
+      ]),
+    });
+  };
+
+  const exportCourseEnrollments = () => {
+    if (enrollmentsByCourseData.length === 0) return;
+    exportToCSV({
+      filename: `analytics-enrollments-${format(new Date(), 'yyyy-MM-dd')}`,
+      headers: ['Course', 'Enrollments'],
+      rows: enrollmentsByCourseData.map(c => [c.name, c.count]),
+    });
+  };
+
+  const exportScoreDistribution = () => {
+    if (scoreDistribution.every(s => s.count === 0)) return;
+    exportToCSV({
+      filename: `analytics-scores-${format(new Date(), 'yyyy-MM-dd')}`,
+      headers: ['Score Range', 'Count'],
+      rows: scoreDistribution.map(s => [s.range, s.count]),
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -363,6 +425,30 @@ export function AnalyticsDashboard() {
               <X className="h-4 w-4" />
             </Button>
           )}
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+                <ChevronDown className="ml-2 h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportKPIs}>
+                Export Summary KPIs
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportTimeline} disabled={completionsOverTime.length === 0}>
+                Export Timeline Data
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportCourseEnrollments} disabled={enrollmentsByCourseData.length === 0}>
+                Export Course Enrollments
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={exportScoreDistribution} disabled={scoreDistribution.every(s => s.count === 0)}>
+                Export Score Distribution
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
