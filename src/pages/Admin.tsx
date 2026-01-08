@@ -10,10 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, BookOpen, BarChart3, Crown, Building2, UserPlus, Mail } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, BookOpen, BarChart3, Crown, Building2, UserPlus, Mail, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
-import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
 import { AdminPermissionManager } from '@/components/admin/AdminPermissionManager';
 import { OrganizationManagement } from '@/components/admin/OrganizationManagement';
 import { UserOrganizationManager } from '@/components/admin/UserOrganizationManager';
@@ -22,6 +21,7 @@ import { UserInvitations } from '@/components/admin/UserInvitations';
 import { CourseManagement } from '@/components/admin/CourseManagement';
 import { CourseAssignment } from '@/components/admin/CourseAssignment';
 import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard';
+import { AdminDashboardOverview } from '@/components/admin/AdminDashboardOverview';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 
 interface Course {
@@ -30,6 +30,8 @@ interface Course {
 }
 
 export default function Admin() {
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [orgSubTab, setOrgSubTab] = useState<string>('organizations');
   const [nameFilter, setNameFilter] = useState('');
   const [organizationFilter, setOrganizationFilter] = useState<string>('all');
   const [courseFilter, setCourseFilter] = useState<string>('all');
@@ -45,6 +47,14 @@ export default function Admin() {
     canAccessAdminManagement,
     canManageCourses,
   } = useAdminPermissions();
+
+  // Handle navigation from dashboard overview
+  const handleNavigate = (tab: string, subtab?: string) => {
+    setActiveTab(tab);
+    if (subtab) {
+      setOrgSubTab(subtab);
+    }
+  };
 
   // Fetch all courses for filter dropdown
   const { data: courses = [] } = useQuery({
@@ -218,7 +228,7 @@ export default function Admin() {
       
       return true;
     });
-  }, [learners, nameFilter, organizationFilter, startDate, endDate]);
+  }, [scopedLearners, nameFilter, organizationFilter, startDate, endDate]);
 
   const hasActiveFilters = nameFilter || organizationFilter !== 'all' || courseFilter !== 'all' || startDate || endDate;
 
@@ -270,42 +280,51 @@ export default function Admin() {
       <main className="flex-1 container py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-          <p className="text-muted-foreground mt-1">Manage learners, reports, and administrator access</p>
+          <p className="text-muted-foreground mt-1">Manage learners, courses, organizations, and permissions</p>
         </div>
 
-        <Tabs defaultValue={canAccessLearnerReports ? "reports" : canAccessCourses ? "courses" : "admins"} className="space-y-6">
-          <TabsList className="flex-wrap">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="flex flex-wrap h-auto gap-1">
+            <TabsTrigger value="dashboard" className="gap-2">
+              <LayoutDashboard className="h-4 w-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </TabsTrigger>
             {canAccessLearnerReports && (
               <TabsTrigger value="reports" className="gap-2">
-                <GraduationCap className="h-4 w-4" />
-                Learner Reports
+                <Users className="h-4 w-4" />
+                <span className="hidden sm:inline">Learners</span>
               </TabsTrigger>
             )}
             {canAccessAnalytics && (
               <TabsTrigger value="analytics" className="gap-2">
                 <BarChart3 className="h-4 w-4" />
-                Analytics
+                <span className="hidden sm:inline">Analytics</span>
               </TabsTrigger>
             )}
             {canAccessCourses && (
               <TabsTrigger value="courses" className="gap-2">
                 <BookOpen className="h-4 w-4" />
-                Courses
+                <span className="hidden sm:inline">Courses</span>
               </TabsTrigger>
             )}
             {canAccessAdminManagement && (
               <TabsTrigger value="orgs" className="gap-2">
                 <Building2 className="h-4 w-4" />
-                Organizations
+                <span className="hidden sm:inline">Organizations</span>
               </TabsTrigger>
             )}
             {canAccessAdminManagement && (
               <TabsTrigger value="admins" className="gap-2">
                 <Crown className="h-4 w-4" />
-                Permissions
+                <span className="hidden sm:inline">Permissions</span>
               </TabsTrigger>
             )}
           </TabsList>
+
+          {/* Dashboard Overview */}
+          <TabsContent value="dashboard" className="space-y-6">
+            <AdminDashboardOverview onNavigate={handleNavigate} />
+          </TabsContent>
 
           <TabsContent value="reports" className="space-y-6">
             {/* Stats Cards */}
@@ -464,23 +483,23 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="orgs">
-            <Tabs defaultValue="organizations" className="space-y-4">
-              <TabsList>
+            <Tabs value={orgSubTab} onValueChange={setOrgSubTab} className="space-y-4">
+              <TabsList className="flex flex-wrap h-auto gap-1">
                 <TabsTrigger value="organizations" className="gap-2">
                   <Building2 className="h-4 w-4" />
-                  Organizations
+                  <span className="hidden sm:inline">Organizations</span>
                 </TabsTrigger>
                 <TabsTrigger value="users" className="gap-2">
                   <Users className="h-4 w-4" />
-                  User Assignment
+                  <span className="hidden sm:inline">Users</span>
                 </TabsTrigger>
                 <TabsTrigger value="import" className="gap-2">
                   <UserPlus className="h-4 w-4" />
-                  Import Users
+                  <span className="hidden sm:inline">Import</span>
                 </TabsTrigger>
                 <TabsTrigger value="invitations" className="gap-2">
                   <Mail className="h-4 w-4" />
-                  Invitations
+                  <span className="hidden sm:inline">Invitations</span>
                 </TabsTrigger>
               </TabsList>
               <TabsContent value="organizations">
