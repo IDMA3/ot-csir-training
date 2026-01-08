@@ -7,11 +7,16 @@ src/
 ├── components/
 │   ├── admin/                 # Admin-specific components
 │   │   ├── AdminUserManagement.tsx
+│   │   ├── CourseManagement.tsx
 │   │   ├── LearnerDetailView.tsx
-│   │   └── LearnerReportTable.tsx
+│   │   ├── LearnerReportTable.tsx
+│   │   ├── ModuleEditor.tsx
+│   │   ├── QuestionEditor.tsx
+│   │   └── RichTextEditor.tsx
 │   ├── ui/                    # shadcn/ui components
 │   │   ├── button.tsx
 │   │   ├── card.tsx
+│   │   ├── checkbox.tsx
 │   │   ├── dialog.tsx
 │   │   └── ... (50+ components)
 │   ├── Header.tsx             # Global navigation header
@@ -96,6 +101,42 @@ Main content area displaying:
 ---
 
 ### Admin Components
+
+#### `CourseManagement.tsx`
+Course administration:
+- Create, edit, delete courses
+- Manage course metadata (title, description, duration, version)
+- Activate/deactivate courses
+- Module management integration
+
+#### `ModuleEditor.tsx`
+Module administration:
+- Create, edit, delete modules
+- Rich text content editing
+- Module type selection (lesson/exam)
+- Sequence ordering with drag-and-drop
+- Question editor integration
+
+#### `QuestionEditor.tsx`
+Question administration:
+- Create, edit, delete questions
+- Multiple choice options (A-F)
+- Correct answer selection
+- Rationale/explanation field
+- Drag-and-drop reordering
+- Bulk selection and deletion
+- Import from JSON/CSV files
+- Export to JSON/CSV files
+- Template downloads for import format
+
+#### `RichTextEditor.tsx`
+Content editing:
+- Tiptap-based rich text editor
+- Text formatting (bold, italic, underline, headings)
+- Lists (ordered, unordered)
+- Link insertion
+- Image upload and embedding
+- Drag-and-drop image support
 
 #### `LearnerReportTable.tsx`
 Data table showing:

@@ -57,9 +57,10 @@ Stores quiz/exam questions for each module.
 | `id` | uuid | No | `gen_random_uuid()` | Primary key |
 | `module_id` | uuid | No | - | FK to modules |
 | `prompt` | text | No | - | Question text |
-| `choices` | jsonb | No | - | Array of choice options |
-| `correct_choice` | text | No | - | Correct answer key |
+| `choices` | jsonb | No | - | Object of choice options (e.g., `{A: "text", B: "text"}`) |
+| `correct_choice` | text | No | - | Correct answer key (A, B, C, etc.) |
 | `rationale` | text | Yes | - | Explanation for answer |
+| `sequence` | integer | No | `1` | Display order within module |
 | `created_at` | timestamptz | No | `now()` | Creation timestamp |
 
 **RLS Policies:**

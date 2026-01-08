@@ -115,7 +115,8 @@ const { data: modules } = await supabase
 const { data: questions } = await supabase
   .from('questions')
   .select('*')
-  .eq('module_id', moduleId);
+  .eq('module_id', moduleId)
+  .order('sequence', { ascending: true });
 ```
 
 **Response:**
@@ -124,11 +125,65 @@ const { data: questions } = await supabase
   id: string;
   module_id: string;
   prompt: string;
-  choices: { key: string; text: string }[];
+  choices: Record<string, string>; // e.g., { A: "text", B: "text", C: "text", D: "text" }
   correct_choice: string;
   rationale: string | null;
+  sequence: number;
   created_at: string;
 }[]
+```
+
+### Create Question (Admin)
+```typescript
+const { error } = await supabase.from('questions').insert({
+  module_id: moduleId,
+  prompt: string,
+  choices: { A: string, B: string, C: string, D: string },
+  correct_choice: string,
+  rationale: string | null,
+  sequence: number
+});
+```
+
+### Update Question (Admin)
+```typescript
+const { error } = await supabase
+  .from('questions')
+  .update({
+    prompt: string,
+    choices: Record<string, string>,
+    correct_choice: string,
+    rationale: string | null
+  })
+  .eq('id', questionId);
+```
+
+### Delete Question (Admin)
+```typescript
+const { error } = await supabase
+  .from('questions')
+  .delete()
+  .eq('id', questionId);
+```
+
+### Bulk Delete Questions (Admin)
+```typescript
+const { error } = await supabase
+  .from('questions')
+  .delete()
+  .in('id', questionIds);
+```
+
+### Reorder Questions (Admin)
+```typescript
+// Update sequence for each question
+const updates = reorderedQuestions.map((q, index) => 
+  supabase
+    .from('questions')
+    .update({ sequence: index + 1 })
+    .eq('id', q.id)
+);
+await Promise.all(updates);
 ```
 
 ---
