@@ -6,12 +6,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
+import { toast } from 'sonner';
 
 interface Course {
   id: string;
@@ -24,8 +25,10 @@ export function PeopleManagement() {
   const [courseFilter, setCourseFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   
-  const { isSuperAdmin, organizationScope } = useAdminPermissions();
+  const { isSuperAdmin, organizationScope, canDeleteUsers } = useAdminPermissions();
+  const queryClient = useQueryClient();
 
   // Fetch all courses for filter dropdown
   const { data: courses = [] } = useQuery({
@@ -221,6 +224,34 @@ export function PeopleManagement() {
     URL.revokeObjectURL(url);
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    setDeletingUserId(userId);
+    try {
+      const { data, error } = await supabase.functions.invoke('delete-user', {
+        body: { userId },
+      });
+
+      if (error) {
+        console.error('Error deleting user:', error);
+        toast.error('Failed to delete user', { description: error.message });
+        return;
+      }
+
+      if (data?.error) {
+        toast.error('Failed to delete user', { description: data.error });
+        return;
+      }
+
+      toast.success(`User "${userName}" deleted successfully`);
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      toast.error('Failed to delete user');
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   const totalLearners = filteredLearners.length;
   const completedLearners = filteredLearners.filter(l => l.completion_percentage === 100).length;
   const certificatesIssued = filteredLearners.filter(l => l.certificate_id).length;
@@ -364,6 +395,9 @@ export function PeopleManagement() {
             isLoading={isLoading} 
             courseFilter={courseFilter}
             courses={courses}
+            canDeleteUsers={canDeleteUsers}
+            onDeleteUser={handleDeleteUser}
+            deletingUserId={deletingUserId}
           />
         </CardContent>
       </Card>
