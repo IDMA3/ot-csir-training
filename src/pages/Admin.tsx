@@ -10,11 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield, BookOpen, BarChart3, Crown } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, BookOpen, BarChart3, Crown, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
 import { AdminPermissionManager } from '@/components/admin/AdminPermissionManager';
+import { OrganizationManagement } from '@/components/admin/OrganizationManagement';
 import { CourseManagement } from '@/components/admin/CourseManagement';
 import { CourseAssignment } from '@/components/admin/CourseAssignment';
 import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard';
@@ -290,6 +291,12 @@ export default function Admin() {
               </TabsTrigger>
             )}
             {canAccessAdminManagement && (
+              <TabsTrigger value="orgs" className="gap-2">
+                <Building2 className="h-4 w-4" />
+                Organizations
+              </TabsTrigger>
+            )}
+            {canAccessAdminManagement && (
               <TabsTrigger value="admins" className="gap-2">
                 <Crown className="h-4 w-4" />
                 Permissions
@@ -451,6 +458,10 @@ export default function Admin() {
           <TabsContent value="courses" className="space-y-6">
             {isSuperAdmin && <CourseAssignment />}
             <CourseManagement organizationScope={isSuperAdmin ? null : organizationScope} />
+          </TabsContent>
+
+          <TabsContent value="orgs">
+            <OrganizationManagement />
           </TabsContent>
 
           <TabsContent value="admins">
