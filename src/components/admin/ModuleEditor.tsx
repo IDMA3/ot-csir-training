@@ -9,9 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Pencil, Trash2, GripVertical, Loader2, ArrowLeft, FileText, ClipboardList, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, GripVertical, Loader2, ArrowLeft, FileText, ClipboardList, Copy, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { RichTextEditor } from './RichTextEditor';
+import { QuestionEditor } from './QuestionEditor';
 
 interface Module {
   id: string;
@@ -34,6 +35,7 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingModule, setEditingModule] = useState<Module | null>(null);
+  const [managingQuestionsModule, setManagingQuestionsModule] = useState<Module | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     body_html: '',
@@ -243,6 +245,17 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
     );
   }
 
+  // If managing questions for a module, show the question editor
+  if (managingQuestionsModule) {
+    return (
+      <QuestionEditor
+        moduleId={managingQuestionsModule.id}
+        moduleTitle={managingQuestionsModule.title}
+        onBack={() => setManagingQuestionsModule(null)}
+      />
+    );
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -401,6 +414,14 @@ export function ModuleEditor({ courseId, courseTitle, onBack }: ModuleEditorProp
                   <TableCell>{module.estimated_minutes} min</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setManagingQuestionsModule(module)}
+                        title="Manage questions"
+                      >
+                        <HelpCircle className="h-4 w-4" />
+                      </Button>
                       <Button 
                         variant="ghost" 
                         size="sm" 
