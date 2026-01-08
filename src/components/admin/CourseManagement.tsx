@@ -10,8 +10,9 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Plus, Pencil, BookOpen, Loader2 } from 'lucide-react';
+import { Plus, Pencil, BookOpen, Loader2, Layers } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModuleEditor } from './ModuleEditor';
 
 interface Course {
   id: string;
@@ -27,6 +28,7 @@ export function CourseManagement() {
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [managingModulesCourse, setManagingModulesCourse] = useState<Course | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -130,6 +132,17 @@ export function CourseManagement() {
       <div className="flex justify-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
+    );
+  }
+
+  // If managing modules for a course, show the module editor
+  if (managingModulesCourse) {
+    return (
+      <ModuleEditor
+        courseId={managingModulesCourse.id}
+        courseTitle={managingModulesCourse.title}
+        onBack={() => setManagingModulesCourse(null)}
+      />
     );
   }
 
@@ -260,9 +273,19 @@ export function CourseManagement() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(course)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setManagingModulesCourse(course)}
+                        title="Manage Modules"
+                      >
+                        <Layers className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleEdit(course)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
