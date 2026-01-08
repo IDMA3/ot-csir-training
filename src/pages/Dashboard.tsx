@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ModuleSidebar } from '@/components/ModuleSidebar';
 import { ModuleContent } from '@/components/ModuleContent';
@@ -9,9 +9,10 @@ import { Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { data: course, isLoading: courseLoading } = useCourse();
-  const { data: modules = [], isLoading: modulesLoading } = useModules(course?.id);
-  const { data: progress = [] } = useProgress();
+  const { courseId } = useParams<{ courseId: string }>();
+  const { data: course, isLoading: courseLoading } = useCourse(courseId);
+  const { data: modules = [], isLoading: modulesLoading } = useModules(courseId);
+  const { data: progress = [] } = useProgress(courseId);
   const [currentModuleId, setCurrentModuleId] = useState<string | null>(null);
   
   const currentModule = modules.find(m => m.id === currentModuleId);
@@ -51,12 +52,12 @@ export default function Dashboard() {
   };
 
   const handleContinue = () => {
-    if (!currentModule) return;
+    if (!currentModule || !courseId) return;
     const nextModule = modules.find(m => m.sequence === currentModule.sequence + 1);
     if (nextModule) {
       setCurrentModuleId(nextModule.id);
     } else if (currentModule.type === 'exam') {
-      navigate('/certificate');
+      navigate(`/courses/${courseId}/certificate`);
     }
   };
 
@@ -64,6 +65,14 @@ export default function Dashboard() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!course) {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-muted-foreground">Course not found</p>
       </div>
     );
   }

@@ -21,8 +21,8 @@ const Index = () => {
             Operational Technology Cyber Security Incident Response micro-training for Seattle City Light personnel
           </p>
           <Button asChild size="lg" variant="secondary">
-            <Link to={user ? '/dashboard' : '/auth'}>
-              {user ? 'Continue Training' : 'Get Started'}
+            <Link to={user ? '/courses' : '/auth'}>
+              {user ? 'Browse Courses' : 'Get Started'}
             </Link>
           </Button>
         </div>
@@ -73,8 +73,8 @@ const Index = () => {
         {/* CTA */}
         <div className="text-center mt-16">
           <Button asChild size="lg">
-            <Link to={user ? '/dashboard' : '/auth'}>
-              {user ? 'Continue Training' : 'Start Training Now'}
+            <Link to={user ? '/courses' : '/auth'}>
+              {user ? 'Browse Courses' : 'Start Training Now'}
             </Link>
           </Button>
         </div>

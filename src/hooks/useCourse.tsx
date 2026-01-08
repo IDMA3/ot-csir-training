@@ -2,25 +2,32 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-interface Course {
+export interface Course {
   id: string;
   title: string;
+  description: string | null;
   duration_minutes: number;
   version: string;
   active: boolean;
 }
 
-interface Module {
+export interface CourseWithProgress extends Course {
+  module_count: number;
+  progress_percentage: number;
+  has_certificate: boolean;
+}
+
+export interface Module {
   id: string;
   course_id: string;
   sequence: number;
   title: string;
-  type: 'module' | 'exam';
+  type: 'lesson' | 'exam';
   estimated_minutes: number;
   body_html: string;
 }
 
-interface Question {
+export interface Question {
   id: string;
   module_id: string;
   prompt: string;
@@ -29,7 +36,7 @@ interface Question {
   rationale: string | null;
 }
 
-interface Progress {
+export interface Progress {
   id: string;
   user_id: string;
   module_id: string;
@@ -38,7 +45,7 @@ interface Progress {
   last_viewed_at: string | null;
 }
 
-interface Attempt {
+export interface Attempt {
   id: string;
   user_id: string;
   module_id: string;
@@ -48,7 +55,7 @@ interface Attempt {
   submitted_at: string;
 }
 
-interface Certificate {
+export interface Certificate {
   id: string;
   user_id: string;
   course_id: string;
@@ -58,18 +65,162 @@ interface Certificate {
   pdf_url: string | null;
 }
 
-export function useCourse() {
+export interface Enrollment {
+  id: string;
+  user_id: string;
+  course_id: string;
+  enrolled_at: string;
+}
+
+// Fetch all active courses with progress info
+export function useCourses() {
+  const { user } = useAuth();
+
   return useQuery({
-    queryKey: ['course'],
+    queryKey: ['courses', user?.id],
     queryFn: async () => {
+      const { data: courses, error } = await supabase
+        .from('course')
+        .select('*')
+        .eq('active', true)
+        .order('title');
+
+      if (error) throw error;
+
+      // Get module counts for each course
+      const { data: allModules } = await supabase
+        .from('modules')
+        .select('id, course_id');
+
+      // Get user progress if logged in
+      let userProgress: Progress[] = [];
+      let userCertificates: Certificate[] = [];
+      
+      if (user) {
+        const { data: progress } = await supabase
+          .from('progress')
+          .select('*')
+          .eq('user_id', user.id);
+        userProgress = progress || [];
+
+        const { data: certs } = await supabase
+          .from('certificates')
+          .select('*')
+          .eq('user_id', user.id);
+        userCertificates = certs || [];
+      }
+
+      // Calculate progress for each course
+      const coursesWithProgress: CourseWithProgress[] = (courses || []).map(course => {
+        const courseModules = allModules?.filter(m => m.course_id === course.id) || [];
+        const moduleIds = courseModules.map(m => m.id);
+        const completedModules = userProgress.filter(
+          p => moduleIds.includes(p.module_id) && p.completed
+        );
+        
+        const progressPercentage = courseModules.length > 0
+          ? Math.round((completedModules.length / courseModules.length) * 100)
+          : 0;
+
+        const hasCertificate = userCertificates.some(c => c.course_id === course.id);
+
+        return {
+          ...course,
+          module_count: courseModules.length,
+          progress_percentage: progressPercentage,
+          has_certificate: hasCertificate,
+        };
+      });
+
+      return coursesWithProgress;
+    },
+  });
+}
+
+// Fetch a single course by ID
+export function useCourse(courseId?: string) {
+  return useQuery({
+    queryKey: ['course', courseId],
+    queryFn: async () => {
+      if (!courseId) return null;
+      
       const { data, error } = await supabase
         .from('course')
         .select('*')
+        .eq('id', courseId)
         .eq('active', true)
         .single();
 
       if (error) throw error;
       return data as Course;
+    },
+    enabled: !!courseId,
+  });
+}
+
+// Legacy: Fetch the single active course (for backward compatibility)
+export function useActiveCourse() {
+  return useQuery({
+    queryKey: ['active-course'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('course')
+        .select('*')
+        .eq('active', true)
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+      return data as Course;
+    },
+  });
+}
+
+// Fetch user enrollments
+export function useEnrollments() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['enrollments', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      
+      const { data, error } = await supabase
+        .from('enrollments')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+      return data as Enrollment[];
+    },
+    enabled: !!user,
+  });
+}
+
+// Enroll in a course
+export function useEnrollInCourse() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({ courseId }: { courseId: string }) => {
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('enrollments')
+        .insert({
+          user_id: user.id,
+          course_id: courseId,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data as Enrollment;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
     },
   });
 }
@@ -87,7 +238,11 @@ export function useModules(courseId: string | undefined) {
         .order('sequence', { ascending: true });
 
       if (error) throw error;
-      return data as Module[];
+      // Map database type to our interface type
+      return (data || []).map(m => ({
+        ...m,
+        type: m.type as 'lesson' | 'exam',
+      })) as Module[];
     },
     enabled: !!courseId,
   });
@@ -114,14 +269,36 @@ export function useQuestions(moduleId: string | undefined) {
   });
 }
 
-export function useProgress() {
+export function useProgress(courseId?: string) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['progress', user?.id],
+    queryKey: ['progress', user?.id, courseId],
     queryFn: async () => {
       if (!user) return [];
       
+      // If courseId provided, filter by course modules
+      if (courseId) {
+        const { data: modules } = await supabase
+          .from('modules')
+          .select('id')
+          .eq('course_id', courseId);
+        
+        const moduleIds = modules?.map(m => m.id) || [];
+        
+        if (moduleIds.length === 0) return [];
+
+        const { data, error } = await supabase
+          .from('progress')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('module_id', moduleIds);
+
+        if (error) throw error;
+        return data as Progress[];
+      }
+
+      // Otherwise get all progress
       const { data, error } = await supabase
         .from('progress')
         .select('*')
@@ -163,19 +340,24 @@ export function useAttempts(moduleId?: string) {
   });
 }
 
-export function useCertificate() {
+export function useCertificate(courseId?: string) {
   const { user } = useAuth();
 
   return useQuery({
-    queryKey: ['certificate', user?.id],
+    queryKey: ['certificate', user?.id, courseId],
     queryFn: async () => {
       if (!user) return null;
       
-      const { data, error } = await supabase
+      let query = supabase
         .from('certificates')
         .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+        .eq('user_id', user.id);
+
+      if (courseId) {
+        query = query.eq('course_id', courseId);
+      }
+
+      const { data, error } = await query.maybeSingle();
 
       if (error) throw error;
       return data as Certificate | null;
@@ -228,6 +410,7 @@ export function useUpdateProgress() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['progress'] });
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
     },
   });
 }
@@ -314,6 +497,7 @@ export function useIssueCertificate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certificate'] });
+      queryClient.invalidateQueries({ queryKey: ['courses'] });
     },
   });
 }

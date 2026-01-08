@@ -6,14 +6,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Award, Download, Loader2, Lock } from 'lucide-react';
 import { useEffect } from 'react';
 import { format } from 'date-fns';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 
 export default function CertificatePage() {
+  const { courseId } = useParams<{ courseId: string }>();
   const { profile } = useAuth();
-  const { data: course } = useCourse();
-  const { data: modules = [] } = useModules(course?.id);
-  const { data: progress = [] } = useProgress();
-  const { data: certificate, isLoading } = useCertificate();
+  const { data: course } = useCourse(courseId);
+  const { data: modules = [] } = useModules(courseId);
+  const { data: progress = [] } = useProgress(courseId);
+  const { data: certificate, isLoading } = useCertificate(courseId);
   const issueCertificate = useIssueCertificate();
 
   const allCompleted = modules.length > 0 && modules.every(m => 
@@ -85,7 +86,11 @@ export default function CertificatePage() {
               <Lock className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
               <h2 className="text-2xl font-bold mb-2">Certificate Locked</h2>
               <p className="text-muted-foreground mb-6">Complete all training modules to earn your certificate.</p>
-              <Button asChild><Link to="/dashboard">Continue Training</Link></Button>
+              <Button asChild>
+                <Link to={courseId ? `/courses/${courseId}` : '/courses'}>
+                  Continue Training
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         ) : certificate ? (

@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, Shield, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
+import { CourseManagement } from '@/components/admin/CourseManagement';
 
 export default function Admin() {
   const [nameFilter, setNameFilter] = useState('');
@@ -200,6 +201,10 @@ export default function Admin() {
               <GraduationCap className="h-4 w-4" />
               Learner Reports
             </TabsTrigger>
+            <TabsTrigger value="courses" className="gap-2">
+              <BookOpen className="h-4 w-4" />
+              Courses
+            </TabsTrigger>
             <TabsTrigger value="admins" className="gap-2">
               <Shield className="h-4 w-4" />
               Admin Access
@@ -333,6 +338,10 @@ export default function Admin() {
                 <LearnerReportTable learners={filteredLearners} isLoading={isLoading} />
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="courses">
+            <CourseManagement />
           </TabsContent>
 
           <TabsContent value="admins">
