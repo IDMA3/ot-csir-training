@@ -10,8 +10,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2, Download, Upload, FileJson, FileSpreadsheet, FileDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, ArrowLeft, HelpCircle, Copy, CheckCircle2, Download, Upload, FileJson, FileSpreadsheet, FileDown, GripVertical } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Question {
   id: string;
@@ -21,6 +38,7 @@ interface Question {
   correct_choice: string;
   rationale: string | null;
   created_at: string;
+  sequence: number;
 }
 
 interface QuestionEditorProps {
@@ -52,11 +70,52 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
         .from('questions')
         .select('*')
         .eq('module_id', moduleId)
-        .order('created_at', { ascending: true });
+        .order('sequence', { ascending: true });
       if (error) throw error;
       return data as Question[];
     },
   });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const reorderMutation = useMutation({
+    mutationFn: async (reorderedQuestions: Question[]) => {
+      const updates = reorderedQuestions.map((q, index) => 
+        supabase
+          .from('questions')
+          .update({ sequence: index + 1 })
+          .eq('id', q.id)
+      );
+      await Promise.all(updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-questions', moduleId] });
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to reorder questions: ${error.message}`);
+      queryClient.invalidateQueries({ queryKey: ['admin-questions', moduleId] });
+    },
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id) {
+      const oldIndex = questions.findIndex((q) => q.id === active.id);
+      const newIndex = questions.findIndex((q) => q.id === over.id);
+      
+      const reordered = arrayMove(questions, oldIndex, newIndex);
+      // Optimistically update the cache
+      queryClient.setQueryData(['admin-questions', moduleId], reordered);
+      // Persist to database
+      reorderMutation.mutate(reordered);
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -68,12 +127,16 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
         }
       });
 
+      // Get next sequence number
+      const nextSequence = questions.length + 1;
+
       const { error } = await supabase.from('questions').insert({
         module_id: moduleId,
         prompt: data.prompt,
         choices: filteredChoices,
         correct_choice: data.correct_choice,
         rationale: data.rationale || null,
+        sequence: nextSequence,
       });
       if (error) throw error;
     },
@@ -748,86 +811,152 @@ export function QuestionEditor({ moduleId, moduleTitle, onBack }: QuestionEditor
             <p>No questions yet. Create your first question to get started.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {questions.map((question, index) => {
-              const choices = question.choices as Record<string, string>;
-              return (
-                <Card key={question.id} className="border">
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-start gap-2">
-                          <Badge variant="outline" className="shrink-0">
-                            Q{index + 1}
-                          </Badge>
-                          <p className="font-medium">{question.prompt}</p>
-                        </div>
-                        <div className="grid gap-1 ml-8">
-                          {Object.entries(choices).map(([letter, choiceValue]) => {
-                            // Handle both string format and object format {id, text}
-                            const text = typeof choiceValue === 'string' 
-                              ? choiceValue 
-                              : (choiceValue as { text?: string })?.text || String(choiceValue);
-                            return (
-                              <div
-                                key={letter}
-                                className={`flex items-center gap-2 text-sm ${
-                                  letter === question.correct_choice
-                                    ? 'text-green-600 dark:text-green-400 font-medium'
-                                    : 'text-muted-foreground'
-                                }`}
-                              >
-                                {letter === question.correct_choice && (
-                                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                )}
-                                <span className={letter !== question.correct_choice ? 'ml-6' : ''}>
-                                  {letter}. {text}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        {question.rationale && (
-                          <div className="ml-8 mt-2 p-2 bg-muted/50 rounded text-sm">
-                            <span className="font-medium">Rationale:</span> {question.rationale}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => duplicateMutation.mutate(question)}
-                          disabled={duplicateMutation.isPending}
-                          title="Duplicate question"
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEdit(question)}
-                          title="Edit question"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDelete(question)}
-                          disabled={deleteMutation.isPending}
-                          title="Delete question"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={questions.map(q => q.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-4">
+                {questions.map((question, index) => (
+                  <SortableQuestionCard
+                    key={question.id}
+                    question={question}
+                    index={index}
+                    onEdit={() => handleEdit(question)}
+                    onDelete={() => handleDelete(question)}
+                    onDuplicate={() => duplicateMutation.mutate(question)}
+                    isDeleting={deleteMutation.isPending}
+                    isDuplicating={duplicateMutation.isPending}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Sortable Question Card Component
+interface SortableQuestionCardProps {
+  question: Question;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  isDeleting: boolean;
+  isDuplicating: boolean;
+}
+
+function SortableQuestionCard({
+  question,
+  index,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  isDeleting,
+  isDuplicating,
+}: SortableQuestionCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: question.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const choices = question.choices as Record<string, string>;
+
+  return (
+    <Card ref={setNodeRef} style={style} className="border">
+      <CardContent className="pt-4">
+        <div className="flex items-start justify-between gap-4">
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground shrink-0"
+          >
+            <GripVertical className="h-5 w-5" />
+          </div>
+          <div className="flex-1 space-y-3">
+            <div className="flex items-start gap-2">
+              <Badge variant="outline" className="shrink-0">
+                Q{index + 1}
+              </Badge>
+              <p className="font-medium">{question.prompt}</p>
+            </div>
+            <div className="grid gap-1 ml-8">
+              {Object.entries(choices).map(([letter, choiceValue]) => {
+                // Handle both string format and object format {id, text}
+                const text = typeof choiceValue === 'string' 
+                  ? choiceValue 
+                  : (choiceValue as { text?: string })?.text || String(choiceValue);
+                return (
+                  <div
+                    key={letter}
+                    className={`flex items-center gap-2 text-sm ${
+                      letter === question.correct_choice
+                        ? 'text-green-600 dark:text-green-400 font-medium'
+                        : 'text-muted-foreground'
+                    }`}
+                  >
+                    {letter === question.correct_choice && (
+                      <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    )}
+                    <span className={letter !== question.correct_choice ? 'ml-6' : ''}>
+                      {letter}. {text}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {question.rationale && (
+              <div className="ml-8 mt-2 p-2 bg-muted/50 rounded text-sm">
+                <span className="font-medium">Rationale:</span> {question.rationale}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDuplicate}
+              disabled={isDuplicating}
+              title="Duplicate question"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onEdit}
+              title="Edit question"
+            >
+              <Pencil className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              disabled={isDeleting}
+              title="Delete question"
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
