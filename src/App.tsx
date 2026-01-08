@@ -58,7 +58,7 @@ const App = () => (
                 <Route
                   path="/courses"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireOrganization>
                       <Courses />
                     </ProtectedRoute>
                   }
@@ -70,7 +70,7 @@ const App = () => (
                 <Route
                   path="/courses/:courseId"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireOrganization>
                       <Dashboard />
                     </ProtectedRoute>
                   }
@@ -78,7 +78,7 @@ const App = () => (
                 <Route
                   path="/courses/:courseId/certificate"
                   element={
-                    <ProtectedRoute>
+                    <ProtectedRoute requireOrganization>
                       <Certificate />
                     </ProtectedRoute>
                   }

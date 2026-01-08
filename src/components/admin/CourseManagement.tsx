@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +37,8 @@ interface Course {
   active: boolean;
   created_at: string;
   organization: string | null;
+  created_by: string | null;
+  creator_organization_id: string | null;
 }
 
 interface CourseManagementProps {
@@ -42,6 +46,8 @@ interface CourseManagementProps {
 }
 
 export function CourseManagement({ organizationScope }: CourseManagementProps) {
+  const { user, profile } = useAuth();
+  const { isSuperAdmin } = useAdminPermissions();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -61,16 +67,33 @@ export function CourseManagement({ organizationScope }: CourseManagementProps) {
   });
 
   const { data: courses = [], isLoading } = useQuery({
-    queryKey: ['admin-courses', organizationScope],
+    queryKey: ['admin-courses', organizationScope, isSuperAdmin, profile?.organization_id],
     queryFn: async () => {
       let query = supabase
         .from('course')
         .select('*')
         .order('created_at', { ascending: false });
       
-      // Filter by organization for non-super admins
-      if (organizationScope) {
-        query = query.eq('organization', organizationScope);
+      // Super admins see all courses
+      // Org admins see courses they created + courses assigned to their org
+      if (!isSuperAdmin && profile?.organization_id) {
+        // For org admins, we need to filter more carefully
+        // Get courses created by their org OR assigned to their org
+        const { data: orgCourses } = await supabase
+          .from('organization_courses')
+          .select('course_id')
+          .eq('organization_id', profile.organization_id);
+        
+        const assignedCourseIds = orgCourses?.map(oc => oc.course_id) || [];
+        
+        const { data, error } = await supabase
+          .from('course')
+          .select('*')
+          .or(`creator_organization_id.eq.${profile.organization_id},id.in.(${assignedCourseIds.join(',')})`)
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        return data as Course[];
       }
       
       const { data, error } = await query;
@@ -81,6 +104,9 @@ export function CourseManagement({ organizationScope }: CourseManagementProps) {
 
   const createMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      // Set creator info based on current user
+      const creatorOrgId = isSuperAdmin ? null : profile?.organization_id;
+      
       const { error } = await supabase.from('course').insert({
         title: data.title,
         description: data.description || null,
@@ -89,6 +115,8 @@ export function CourseManagement({ organizationScope }: CourseManagementProps) {
         version: data.version,
         active: data.active,
         organization: data.organization || organizationScope || null,
+        created_by: user?.id,
+        creator_organization_id: creatorOrgId,
       });
       if (error) throw error;
     },

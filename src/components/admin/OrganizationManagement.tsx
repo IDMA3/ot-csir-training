@@ -14,9 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Pencil, Trash2, Building2, Users, Loader2, Settings, Upload, X, Palette, BookOpen } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Users, Loader2, Settings, Upload, X, Palette, BookOpen, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { RecertificationSettings } from './RecertificationSettings';
 
 interface Organization {
   id: string;
@@ -383,10 +384,11 @@ export function OrganizationManagement() {
                   </DialogHeader>
                   
                   <Tabs defaultValue="general" className="mt-4">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                       <TabsTrigger value="general">General</TabsTrigger>
                       <TabsTrigger value="branding">Branding</TabsTrigger>
                       <TabsTrigger value="courses">Courses</TabsTrigger>
+                      <TabsTrigger value="recertification" disabled={!editingOrg}>Recertification</TabsTrigger>
                     </TabsList>
                     
                     <TabsContent value="general" className="space-y-4 mt-4">
@@ -548,6 +550,15 @@ export function OrganizationManagement() {
                         <p className="text-sm text-muted-foreground">
                           {formData.allowedCourseIds.length} course{formData.allowedCourseIds.length !== 1 ? 's' : ''} selected
                         </p>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="recertification" className="mt-4">
+                      {editingOrg && (
+                        <RecertificationSettings 
+                          organizationId={editingOrg.id} 
+                          organizationName={editingOrg.name}
+                        />
                       )}
                     </TabsContent>
                   </Tabs>

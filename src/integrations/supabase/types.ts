@@ -134,6 +134,8 @@ export type Database = {
           active: boolean
           category: string | null
           created_at: string
+          created_by: string | null
+          creator_organization_id: string | null
           description: string | null
           duration_minutes: number
           id: string
@@ -145,6 +147,8 @@ export type Database = {
           active?: boolean
           category?: string | null
           created_at?: string
+          created_by?: string | null
+          creator_organization_id?: string | null
           description?: string | null
           duration_minutes: number
           id?: string
@@ -156,6 +160,8 @@ export type Database = {
           active?: boolean
           category?: string | null
           created_at?: string
+          created_by?: string | null
+          creator_organization_id?: string | null
           description?: string | null
           duration_minutes?: number
           id?: string
@@ -163,7 +169,15 @@ export type Database = {
           title?: string
           version?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "course_creator_organization_id_fkey"
+            columns: ["creator_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       enrollments: {
         Row: {
@@ -417,6 +431,54 @@ export type Database = {
           },
         ]
       }
+      recertification_schedules: {
+        Row: {
+          course_id: string
+          created_at: string
+          custom_days: number | null
+          enabled: boolean
+          id: string
+          organization_id: string
+          schedule_type: string
+          updated_at: string
+        }
+        Insert: {
+          course_id: string
+          created_at?: string
+          custom_days?: number | null
+          enabled?: boolean
+          id?: string
+          organization_id: string
+          schedule_type: string
+          updated_at?: string
+        }
+        Update: {
+          course_id?: string
+          created_at?: string
+          custom_days?: number | null
+          enabled?: boolean
+          id?: string
+          organization_id?: string
+          schedule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recertification_schedules_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recertification_schedules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_invitations: {
         Row: {
           accepted_at: string | null
@@ -498,6 +560,10 @@ export type Database = {
     Functions: {
       can_manage_org_courses: {
         Args: { check_org: string; check_user_id: string }
+        Returns: boolean
+      }
+      can_view_course: {
+        Args: { course_uuid: string; user_uuid: string }
         Returns: boolean
       }
       can_view_org_users: {
