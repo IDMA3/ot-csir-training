@@ -4,9 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useCourse, useModules, useEnrollments, useEnrollInCourse, useProgress, calculateProgressPercentage } from '@/hooks/useCourse';
+import { useCanAccessCourse } from '@/hooks/useOrganizationCourses';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, Clock, BookOpen, GraduationCap, CheckCircle, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Loader2, Clock, BookOpen, GraduationCap, CheckCircle, Lock, ArrowRight, ArrowLeft, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function CoursePreview() {
@@ -18,6 +20,7 @@ export default function CoursePreview() {
   const { data: modules = [], isLoading: modulesLoading } = useModules(courseId);
   const { data: enrollments = [] } = useEnrollments();
   const { data: progress = [] } = useProgress(courseId);
+  const { data: canAccess, isLoading: accessLoading } = useCanAccessCourse(courseId);
   const enrollMutation = useEnrollInCourse();
 
   const isEnrolled = enrollments.some(e => e.course_id === courseId);
@@ -36,10 +39,33 @@ export default function CoursePreview() {
     }
   };
 
-  if (courseLoading || modulesLoading) {
+  if (courseLoading || modulesLoading || accessLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Show access denied if user can't access this course
+  if (user && canAccess === false) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center max-w-md mx-auto px-4">
+            <Alert variant="destructive" className="mb-6">
+              <ShieldAlert className="h-4 w-4" />
+              <AlertTitle>Course Not Available</AlertTitle>
+              <AlertDescription>
+                This course is not available for your organization. Contact your administrator if you believe this is an error.
+              </AlertDescription>
+            </Alert>
+            <Button asChild>
+              <Link to="/courses">Browse Available Courses</Link>
+            </Button>
+          </div>
+        </main>
       </div>
     );
   }

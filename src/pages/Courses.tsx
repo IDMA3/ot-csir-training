@@ -3,7 +3,8 @@ import { Header } from '@/components/Header';
 import { CourseCard } from '@/components/CourseCard';
 import { EmptyState } from '@/components/EmptyState';
 import { CourseGridSkeleton } from '@/components/LoadingSkeleton';
-import { useCourses, useEnrollments, useEnrollInCourse } from '@/hooks/useCourse';
+import { useEnrollments, useEnrollInCourse } from '@/hooks/useCourse';
+import { useOrganizationCourses } from '@/hooks/useOrganizationCourses';
 import { useAuth } from '@/hooks/useAuth';
 import { BookOpen, Filter, Search, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,7 +16,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 export default function Courses() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { data: courses = [], isLoading: coursesLoading } = useCourses();
+  const { data: courses = [], isLoading: coursesLoading } = useOrganizationCourses();
   const { data: enrollments = [] } = useEnrollments();
   const enrollMutation = useEnrollInCourse();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);

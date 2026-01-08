@@ -513,6 +513,10 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { check_user_id: string }; Returns: boolean }
+      user_can_access_course: {
+        Args: { course_uuid: string; user_uuid: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "learner" | "admin"
