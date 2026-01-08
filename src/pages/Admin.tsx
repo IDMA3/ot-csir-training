@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, BookOpen, BarChart3, Crown, Building2, UserPlus, LayoutDashboard } from 'lucide-react';
 import { AdminPermissionManager } from '@/components/admin/AdminPermissionManager';
 import { OrganizationManagement } from '@/components/admin/OrganizationManagement';
+import { OrganizationReports } from '@/components/admin/OrganizationReports';
 import { CourseManagement } from '@/components/admin/CourseManagement';
 import { CourseAssignment } from '@/components/admin/CourseAssignment';
 import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard';
@@ -105,6 +106,7 @@ export default function Admin() {
 
           {/* Organizations */}
           <TabsContent value="organizations" className="space-y-6">
+            <OrganizationReports />
             <OrganizationManagement />
           </TabsContent>
 
