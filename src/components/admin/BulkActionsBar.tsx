@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Trash2, RotateCcw, BookPlus, X, Building2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Trash2, RotateCcw, BookPlus, BookMinus, X, Building2 } from 'lucide-react';
 
 interface Course {
   id: string;
@@ -21,12 +22,14 @@ interface BulkActionsBarProps {
   onClearSelection: () => void;
   onBulkDelete: () => void;
   onBulkResetProgress: (courseId?: string) => void;
-  onBulkEnroll: (courseId: string) => void;
+  onBulkEnroll: (courseIds: string[]) => void;
+  onBulkUnenroll: (courseIds: string[]) => void;
   onBulkAssignOrg: (orgId: string | null) => void;
   courses: Course[];
   organizations: Organization[];
   canDeleteUsers: boolean;
   isProcessing: boolean;
+  showOrgAssignment?: boolean;
 }
 
 export function BulkActionsBar({
@@ -35,13 +38,16 @@ export function BulkActionsBar({
   onBulkDelete,
   onBulkResetProgress,
   onBulkEnroll,
+  onBulkUnenroll,
   onBulkAssignOrg,
   courses,
   organizations,
   canDeleteUsers,
   isProcessing,
+  showOrgAssignment = true,
 }: BulkActionsBarProps) {
-  const [enrollCourseId, setEnrollCourseId] = useState<string>('');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<Set<string>>(new Set());
+  const [unenrollCourseIds, setUnenrollCourseIds] = useState<Set<string>>(new Set());
   const [resetCourseId, setResetCourseId] = useState<string>('all');
   const [assignOrgId, setAssignOrgId] = useState<string>('');
 
@@ -54,6 +60,16 @@ export function BulkActionsBar({
   const wouldExceedLimit = selectedOrg?.max_users 
     ? (selectedOrg.userCount + selectedCount) > selectedOrg.max_users 
     : false;
+
+  const toggleCourseSelection = (courseId: string, set: Set<string>, setFn: (s: Set<string>) => void) => {
+    const next = new Set(set);
+    if (next.has(courseId)) {
+      next.delete(courseId);
+    } else {
+      next.add(courseId);
+    }
+    setFn(next);
+  };
 
   return (
     <div className="sticky top-0 z-10 bg-primary text-primary-foreground rounded-lg p-4 flex items-center justify-between gap-4 shadow-lg animate-in slide-in-from-top-2">
@@ -72,118 +88,178 @@ export function BulkActionsBar({
         </Button>
       </div>
 
-      <div className="flex items-center gap-2">
-        {/* Bulk Enroll */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {/* Bulk Enroll - Multi-select */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="secondary"
               size="sm"
               disabled={isProcessing}
+              onClick={() => setSelectedCourseIds(new Set())}
             >
               <BookPlus className="h-4 w-4 mr-2" />
-              Enroll in Course
+              Enroll in Courses
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-h-[80vh] flex flex-col">
             <AlertDialogHeader>
-              <AlertDialogTitle>Enroll Users in Course</AlertDialogTitle>
+              <AlertDialogTitle>Enroll Users in Courses</AlertDialogTitle>
               <AlertDialogDescription>
-                Select a course to enroll {selectedCount} {selectedCount === 1 ? 'user' : 'users'} in.
+                Select one or more courses to enroll {selectedCount} {selectedCount === 1 ? 'user' : 'users'} in.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="py-4">
-              <Select value={enrollCourseId} onValueChange={setEnrollCourseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a course" />
-                </SelectTrigger>
-                <SelectContent>
-                  {courses.map(course => (
-                    <SelectItem key={course.id} value={course.id}>
-                      {course.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="py-4 space-y-2 max-h-60 overflow-auto flex-1">
+              {courses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No courses available.</p>
+              ) : (
+                courses.map(course => (
+                  <label 
+                    key={course.id} 
+                    className="flex items-center gap-3 p-2 hover:bg-muted rounded cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={selectedCourseIds.has(course.id)}
+                      onCheckedChange={() => toggleCourseSelection(course.id, selectedCourseIds, setSelectedCourseIds)}
+                    />
+                    <span className="text-sm">{course.title}</span>
+                  </label>
+                ))
+              )}
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setEnrollCourseId('')}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel onClick={() => setSelectedCourseIds(new Set())}>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                disabled={!enrollCourseId}
+                disabled={selectedCourseIds.size === 0}
                 onClick={() => {
-                  onBulkEnroll(enrollCourseId);
-                  setEnrollCourseId('');
+                  onBulkEnroll(Array.from(selectedCourseIds));
+                  setSelectedCourseIds(new Set());
                 }}
               >
-                Enroll Users
+                Enroll in {selectedCourseIds.size} course{selectedCourseIds.size !== 1 ? 's' : ''}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* Bulk Assign Organization */}
+        {/* Bulk Unenroll - Multi-select */}
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               variant="secondary"
               size="sm"
               disabled={isProcessing}
+              onClick={() => setUnenrollCourseIds(new Set())}
             >
-              <Building2 className="h-4 w-4 mr-2" />
-              Assign Org
+              <BookMinus className="h-4 w-4 mr-2" />
+              Remove from Courses
             </Button>
           </AlertDialogTrigger>
-          <AlertDialogContent>
+          <AlertDialogContent className="max-h-[80vh] flex flex-col">
             <AlertDialogHeader>
-              <AlertDialogTitle>Assign to Organization</AlertDialogTitle>
+              <AlertDialogTitle>Remove Users from Courses</AlertDialogTitle>
               <AlertDialogDescription>
-                Select an organization for {selectedCount} {selectedCount === 1 ? 'user' : 'users'}.
+                Select one or more courses to remove {selectedCount} {selectedCount === 1 ? 'user' : 'users'} from.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <div className="py-4 space-y-2">
-              <Select value={assignOrgId} onValueChange={setAssignOrgId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an organization" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">
-                    <span className="text-muted-foreground">Remove from organization</span>
-                  </SelectItem>
-                  {organizations.map(org => {
-                    const limitInfo = org.max_users 
-                      ? `(${org.userCount}/${org.max_users} users)` 
-                      : `(${org.userCount} users)`;
-                    const atLimit = org.max_users && (org.userCount + selectedCount) > org.max_users;
-                    return (
-                      <SelectItem key={org.id} value={org.id}>
-                        <span className={atLimit ? 'text-destructive' : ''}>
-                          {org.name} {limitInfo} {atLimit && '⚠️'}
-                        </span>
-                      </SelectItem>
-                    );
-                  })}
-                </SelectContent>
-              </Select>
-              {wouldExceedLimit && (
-                <p className="text-sm text-destructive">
-                  Warning: This would exceed the organization's user limit of {selectedOrg?.max_users}.
-                </p>
+            <div className="py-4 space-y-2 max-h-60 overflow-auto flex-1">
+              {courses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No courses available.</p>
+              ) : (
+                courses.map(course => (
+                  <label 
+                    key={course.id} 
+                    className="flex items-center gap-3 p-2 hover:bg-muted rounded cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={unenrollCourseIds.has(course.id)}
+                      onCheckedChange={() => toggleCourseSelection(course.id, unenrollCourseIds, setUnenrollCourseIds)}
+                    />
+                    <span className="text-sm">{course.title}</span>
+                  </label>
+                ))
               )}
             </div>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setAssignOrgId('')}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel onClick={() => setUnenrollCourseIds(new Set())}>Cancel</AlertDialogCancel>
               <AlertDialogAction
-                disabled={!assignOrgId || wouldExceedLimit}
+                disabled={unenrollCourseIds.size === 0}
                 onClick={() => {
-                  onBulkAssignOrg(assignOrgId === 'none' ? null : assignOrgId);
-                  setAssignOrgId('');
+                  onBulkUnenroll(Array.from(unenrollCourseIds));
+                  setUnenrollCourseIds(new Set());
                 }}
               >
-                {assignOrgId === 'none' ? 'Remove from Organization' : 'Assign to Organization'}
+                Remove from {unenrollCourseIds.size} course{unenrollCourseIds.size !== 1 ? 's' : ''}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Bulk Assign Organization - Super admin only */}
+        {showOrgAssignment && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={isProcessing}
+              >
+                <Building2 className="h-4 w-4 mr-2" />
+                Assign Org
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Assign to Organization</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Select an organization for {selectedCount} {selectedCount === 1 ? 'user' : 'users'}.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="py-4 space-y-2">
+                <Select value={assignOrgId} onValueChange={setAssignOrgId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an organization" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">
+                      <span className="text-muted-foreground">Remove from organization</span>
+                    </SelectItem>
+                    {organizations.map(org => {
+                      const limitInfo = org.max_users 
+                        ? `(${org.userCount}/${org.max_users} users)` 
+                        : `(${org.userCount} users)`;
+                      const atLimit = org.max_users && (org.userCount + selectedCount) > org.max_users;
+                      return (
+                        <SelectItem key={org.id} value={org.id}>
+                          <span className={atLimit ? 'text-destructive' : ''}>
+                            {org.name} {limitInfo} {atLimit && '⚠️'}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+                {wouldExceedLimit && (
+                  <p className="text-sm text-destructive">
+                    Warning: This would exceed the organization's user limit of {selectedOrg?.max_users}.
+                  </p>
+                )}
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setAssignOrgId('')}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={!assignOrgId || wouldExceedLimit}
+                  onClick={() => {
+                    onBulkAssignOrg(assignOrgId === 'none' ? null : assignOrgId);
+                    setAssignOrgId('');
+                  }}
+                >
+                  {assignOrgId === 'none' ? 'Remove from Organization' : 'Assign to Organization'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
 
         {/* Bulk Reset Progress */}
         <AlertDialog>
