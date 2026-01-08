@@ -31,8 +31,9 @@ import {
   Upload,
   Loader2,
 } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface RichTextEditorProps {
   content: string;
@@ -45,7 +46,9 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
   const [imageUrl, setImageUrl] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [imagePopoverOpen, setImagePopoverOpen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -108,20 +111,17 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
     }
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const uploadImage = useCallback(async (file: File): Promise<string | null> => {
     // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('Please select an image file');
-      return;
+      return null;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('Image must be less than 5MB');
-      return;
+      return null;
     }
 
     setIsUploading(true);
@@ -146,25 +146,122 @@ export function RichTextEditor({ content, onChange, placeholder }: RichTextEdito
         .from('module-images')
         .getPublicUrl(filePath);
 
-      // Insert image into editor
-      editor.chain().focus().setImage({ src: publicUrl }).run();
-      
-      toast.success('Image uploaded successfully');
-      setImagePopoverOpen(false);
+      return publicUrl;
     } catch (error) {
       console.error('Upload error:', error);
       toast.error('Failed to upload image');
+      return null;
     } finally {
       setIsUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    }
+  }, []);
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const publicUrl = await uploadImage(file);
+    if (publicUrl && editor) {
+      editor.chain().focus().setImage({ src: publicUrl }).run();
+      toast.success('Image uploaded successfully');
+      setImagePopoverOpen(false);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set dragging to false if we're leaving the container entirely
+    if (editorContainerRef.current && !editorContainerRef.current.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+
+    if (imageFiles.length === 0) {
+      toast.error('Please drop an image file');
+      return;
+    }
+
+    // Upload all images
+    for (const file of imageFiles) {
+      const publicUrl = await uploadImage(file);
+      if (publicUrl && editor) {
+        editor.chain().focus().setImage({ src: publicUrl }).run();
+        toast.success('Image uploaded successfully');
+      }
+    }
+  }, [editor, uploadImage]);
+
+  const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
+    const items = Array.from(e.clipboardData.items);
+    const imageItems = items.filter(item => item.type.startsWith('image/'));
+
+    if (imageItems.length === 0) return;
+
+    e.preventDefault();
+
+    for (const item of imageItems) {
+      const file = item.getAsFile();
+      if (file) {
+        const publicUrl = await uploadImage(file);
+        if (publicUrl && editor) {
+          editor.chain().focus().setImage({ src: publicUrl }).run();
+          toast.success('Image pasted and uploaded');
+        }
+      }
+    }
+  }, [editor, uploadImage]);
+
   return (
-    <div className="border rounded-md overflow-hidden bg-background">
+    <div 
+      ref={editorContainerRef}
+      className={cn(
+        "border rounded-md overflow-hidden bg-background relative transition-colors",
+        isDragging && "ring-2 ring-primary ring-offset-2"
+      )}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      onPaste={handlePaste}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 bg-primary/10 z-50 flex items-center justify-center pointer-events-none">
+          <div className="bg-background border-2 border-dashed border-primary rounded-lg p-6 text-center">
+            <Upload className="h-8 w-8 mx-auto mb-2 text-primary" />
+            <p className="text-sm font-medium text-primary">Drop image here to upload</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Upload indicator */}
+      {isUploading && (
+        <div className="absolute inset-0 bg-background/80 z-50 flex items-center justify-center">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Uploading image...
+          </div>
+        </div>
+      )}
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-1 p-2 border-b bg-muted/30">
         {/* Undo/Redo */}
