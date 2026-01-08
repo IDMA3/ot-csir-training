@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,17 +36,29 @@ export function UserInvitations() {
   const [selectedInvitations, setSelectedInvitations] = useState<string[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   
-  const { isSuperAdmin } = useAdminPermissions();
+  const { isSuperAdmin, canManageUsers } = useAdminPermissions();
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch invitations
+  // Check if user can view invitations
+  const canViewInvitations = isSuperAdmin || canManageUsers;
+  const canDeleteInvitations = isSuperAdmin; // Only super admins can delete
+
+  // Fetch invitations - scoped to org for org admins
   const { data: invitations = [], isLoading } = useQuery({
-    queryKey: ['admin-invitations'],
+    queryKey: ['admin-invitations', isSuperAdmin, profile?.organization_id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('user_invitations')
         .select('*')
         .order('created_at', { ascending: false });
+      
+      // Scope to organization for org admins
+      if (!isSuperAdmin && profile?.organization_id) {
+        query = query.eq('organization_id', profile.organization_id);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
 
@@ -67,6 +80,7 @@ export function UserInvitations() {
         organization_name: inv.organization_id ? orgMap.get(inv.organization_id) : undefined,
       })) as Invitation[];
     },
+    enabled: canViewInvitations,
   });
 
   // Cancel invitation mutation
@@ -202,11 +216,11 @@ export function UserInvitations() {
     return <Badge variant="outline"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
   };
 
-  if (!isSuperAdmin) {
+  if (!canViewInvitations) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-muted-foreground">
-          Only super admins can manage invitations.
+          You don't have permission to view invitations.
         </CardContent>
       </Card>
     );
@@ -323,14 +337,16 @@ export function UserInvitations() {
                 <XCircle className="h-4 w-4 mr-1" />
                 Cancel
               </Button>
-              <Button 
-                size="sm" 
-                variant="destructive"
-                onClick={() => setDeleteConfirmOpen(true)}
-              >
-                <Trash2 className="h-4 w-4 mr-1" />
-                Delete
-              </Button>
+              {canDeleteInvitations && (
+                <Button 
+                  size="sm" 
+                  variant="destructive"
+                  onClick={() => setDeleteConfirmOpen(true)}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              )}
             </div>
           )}
 

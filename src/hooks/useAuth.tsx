@@ -7,6 +7,7 @@ interface Profile {
   first_name: string;
   last_name: string;
   organization: string | null;
+  organization_id: string | null;
   job_role: string | null;
 }
 

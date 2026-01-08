@@ -23,6 +23,7 @@ export default function Admin() {
     canAccessAnalytics, 
     canAccessCourses, 
     canAccessAdminManagement,
+    canManageUsers,
   } = useAdminPermissions();
 
   // Handle navigation from dashboard overview
@@ -51,7 +52,7 @@ export default function Admin() {
                 <span className="hidden sm:inline">People</span>
               </TabsTrigger>
             )}
-            {canAccessAdminManagement && (
+            {(canAccessAdminManagement || canManageUsers) && (
               <TabsTrigger value="onboard" className="gap-2">
                 <UserPlus className="h-4 w-4" />
                 <span className="hidden sm:inline">Onboard</span>
