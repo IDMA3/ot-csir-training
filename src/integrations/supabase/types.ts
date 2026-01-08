@@ -482,6 +482,7 @@ export type Database = {
       user_invitations: {
         Row: {
           accepted_at: string | null
+          admin_permissions: Json | null
           course_ids: string[] | null
           created_at: string
           email: string
@@ -489,6 +490,7 @@ export type Database = {
           first_name: string | null
           id: string
           invited_by: string | null
+          invited_role: string
           job_role: string | null
           last_name: string | null
           organization_id: string | null
@@ -497,6 +499,7 @@ export type Database = {
         }
         Insert: {
           accepted_at?: string | null
+          admin_permissions?: Json | null
           course_ids?: string[] | null
           created_at?: string
           email: string
@@ -504,6 +507,7 @@ export type Database = {
           first_name?: string | null
           id?: string
           invited_by?: string | null
+          invited_role?: string
           job_role?: string | null
           last_name?: string | null
           organization_id?: string | null
@@ -512,6 +516,7 @@ export type Database = {
         }
         Update: {
           accepted_at?: string | null
+          admin_permissions?: Json | null
           course_ids?: string[] | null
           created_at?: string
           email?: string
@@ -519,6 +524,7 @@ export type Database = {
           first_name?: string | null
           id?: string
           invited_by?: string | null
+          invited_role?: string
           job_role?: string | null
           last_name?: string | null
           organization_id?: string | null
