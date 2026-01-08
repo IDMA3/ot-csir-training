@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { BulkActionsBar } from '@/components/admin/BulkActionsBar';
 import { useAdminPermissions } from '@/hooks/useAdminPermissions';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { exportToCSV } from '@/lib/csv-export';
 
@@ -39,18 +40,47 @@ export function PeopleManagement() {
   const [isProcessingBulk, setIsProcessingBulk] = useState(false);
   
   const { isSuperAdmin, organizationScope, canDeleteUsers } = useAdminPermissions();
+  const { profile } = useAuth();
   const queryClient = useQueryClient();
 
-  // Fetch all courses for filter dropdown
+  // Fetch courses - filtered for org admins
   const { data: courses = [] } = useQuery({
-    queryKey: ['admin-courses-filter'],
+    queryKey: ['admin-courses-filter', isSuperAdmin, profile?.organization_id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('course')
-        .select('id, title')
-        .order('title');
-      if (error) throw error;
-      return data as Course[];
+      if (isSuperAdmin) {
+        // Super admin sees all courses
+        const { data, error } = await supabase
+          .from('course')
+          .select('id, title')
+          .order('title');
+        if (error) throw error;
+        return data as Course[];
+      } else if (profile?.organization_id) {
+        // Org admin: get courses assigned to their org + courses created by their org
+        const { data: orgCourses } = await supabase
+          .from('organization_courses')
+          .select('course_id')
+          .eq('organization_id', profile.organization_id);
+        
+        const assignedIds = orgCourses?.map(oc => oc.course_id) || [];
+        
+        // Build OR filter for courses
+        const filters: string[] = [];
+        if (assignedIds.length > 0) {
+          filters.push(`id.in.(${assignedIds.join(',')})`);
+        }
+        filters.push(`creator_organization_id.eq.${profile.organization_id}`);
+        
+        const { data, error } = await supabase
+          .from('course')
+          .select('id, title')
+          .or(filters.join(','))
+          .order('title');
+        
+        if (error) throw error;
+        return data as Course[];
+      }
+      return [];
     },
   });
 
@@ -398,36 +428,40 @@ export function PeopleManagement() {
     }
   };
 
-  const handleBulkEnroll = async (courseId: string) => {
+  const handleBulkEnroll = async (courseIds: string[]) => {
     setIsProcessingBulk(true);
     const userIds = Array.from(selectedUserIds);
     
     try {
-      // Get existing enrollments to avoid duplicates
-      const { data: existingEnrollments } = await supabase
-        .from('enrollments')
-        .select('user_id')
-        .eq('course_id', courseId)
-        .in('user_id', userIds);
+      let totalEnrolled = 0;
+      let totalAlreadyEnrolled = 0;
 
-      const existingUserIds = new Set(existingEnrollments?.map(e => e.user_id) || []);
-      const newEnrollments = userIds
-        .filter(id => !existingUserIds.has(id))
-        .map(user_id => ({ user_id, course_id: courseId }));
+      for (const courseId of courseIds) {
+        // Get existing enrollments to avoid duplicates
+        const { data: existingEnrollments } = await supabase
+          .from('enrollments')
+          .select('user_id')
+          .eq('course_id', courseId)
+          .in('user_id', userIds);
 
-      if (newEnrollments.length > 0) {
-        const { error } = await supabase.from('enrollments').insert(newEnrollments);
-        if (error) throw error;
+        const existingUserIds = new Set(existingEnrollments?.map(e => e.user_id) || []);
+        const newEnrollments = userIds
+          .filter(id => !existingUserIds.has(id))
+          .map(user_id => ({ user_id, course_id: courseId }));
+
+        if (newEnrollments.length > 0) {
+          const { error } = await supabase.from('enrollments').insert(newEnrollments);
+          if (error) throw error;
+          totalEnrolled += newEnrollments.length;
+        }
+        totalAlreadyEnrolled += (userIds.length - newEnrollments.length);
       }
 
-      const courseName = courses.find(c => c.id === courseId)?.title || 'course';
-      const alreadyEnrolled = userIds.length - newEnrollments.length;
-      
-      if (newEnrollments.length > 0) {
-        toast.success(`Enrolled ${newEnrollments.length} user${newEnrollments.length > 1 ? 's' : ''} in ${courseName}`);
+      if (totalEnrolled > 0) {
+        toast.success(`Enrolled users in ${courseIds.length} course${courseIds.length > 1 ? 's' : ''}`);
       }
-      if (alreadyEnrolled > 0) {
-        toast.info(`${alreadyEnrolled} user${alreadyEnrolled > 1 ? 's were' : ' was'} already enrolled`);
+      if (totalAlreadyEnrolled > 0 && totalEnrolled === 0) {
+        toast.info('Users were already enrolled in selected courses');
       }
 
       setSelectedUserIds(new Set());
@@ -435,6 +469,32 @@ export function PeopleManagement() {
     } catch (err) {
       console.error('Error enrolling users:', err);
       toast.error('Failed to enroll users');
+    } finally {
+      setIsProcessingBulk(false);
+    }
+  };
+
+  const handleBulkUnenroll = async (courseIds: string[]) => {
+    setIsProcessingBulk(true);
+    const userIds = Array.from(selectedUserIds);
+    
+    try {
+      for (const courseId of courseIds) {
+        const { error } = await supabase
+          .from('enrollments')
+          .delete()
+          .eq('course_id', courseId)
+          .in('user_id', userIds);
+        
+        if (error) throw error;
+      }
+
+      toast.success(`Removed users from ${courseIds.length} course${courseIds.length > 1 ? 's' : ''}`);
+      setSelectedUserIds(new Set());
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    } catch (err) {
+      console.error('Error removing users from courses:', err);
+      toast.error('Failed to remove users from courses');
     } finally {
       setIsProcessingBulk(false);
     }
@@ -489,11 +549,13 @@ export function PeopleManagement() {
         onBulkDelete={handleBulkDelete}
         onBulkResetProgress={handleBulkResetProgress}
         onBulkEnroll={handleBulkEnroll}
+        onBulkUnenroll={handleBulkUnenroll}
         onBulkAssignOrg={handleBulkAssignOrg}
         courses={courses}
         organizations={organizationsForBulk}
         canDeleteUsers={canDeleteUsers}
         isProcessing={isProcessingBulk}
+        showOrgAssignment={isSuperAdmin}
       />
 
       {/* Stats Cards */}
