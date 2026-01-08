@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -83,7 +84,7 @@ export function ModuleContent({
       {/* Module content */}
       <div 
         className="module-content prose prose-slate max-w-none"
-        dangerouslySetInnerHTML={{ __html: bodyHtml }}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(bodyHtml) }}
       />
 
       {/* Questions section */}
