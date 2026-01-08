@@ -10,12 +10,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
-import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, BookOpen, BarChart3, Crown, Building2 } from 'lucide-react';
+import { CalendarIcon, Download, Search, Users, GraduationCap, Award, X, BookOpen, BarChart3, Crown, Building2, UserPlus, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
 import { AdminPermissionManager } from '@/components/admin/AdminPermissionManager';
 import { OrganizationManagement } from '@/components/admin/OrganizationManagement';
+import { UserOrganizationManager } from '@/components/admin/UserOrganizationManager';
+import { BulkUserImport } from '@/components/admin/BulkUserImport';
+import { UserInvitations } from '@/components/admin/UserInvitations';
 import { CourseManagement } from '@/components/admin/CourseManagement';
 import { CourseAssignment } from '@/components/admin/CourseAssignment';
 import { AnalyticsDashboard } from '@/components/admin/AnalyticsDashboard';
@@ -461,7 +464,38 @@ export default function Admin() {
           </TabsContent>
 
           <TabsContent value="orgs">
-            <OrganizationManagement />
+            <Tabs defaultValue="organizations" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="organizations" className="gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Organizations
+                </TabsTrigger>
+                <TabsTrigger value="users" className="gap-2">
+                  <Users className="h-4 w-4" />
+                  User Assignment
+                </TabsTrigger>
+                <TabsTrigger value="import" className="gap-2">
+                  <UserPlus className="h-4 w-4" />
+                  Import Users
+                </TabsTrigger>
+                <TabsTrigger value="invitations" className="gap-2">
+                  <Mail className="h-4 w-4" />
+                  Invitations
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="organizations">
+                <OrganizationManagement />
+              </TabsContent>
+              <TabsContent value="users">
+                <UserOrganizationManager />
+              </TabsContent>
+              <TabsContent value="import">
+                <BulkUserImport />
+              </TabsContent>
+              <TabsContent value="invitations">
+                <UserInvitations />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="admins">
