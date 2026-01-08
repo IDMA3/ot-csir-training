@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Shield, LogOut, User, BookOpen, Award, Settings } from 'lucide-react';
+import { Shield, LogOut, User, BookOpen, Settings } from 'lucide-react';
 
 export function Header() {
   const { user, profile, isAdmin, signOut } = useAuth();
@@ -28,12 +28,12 @@ export function Header() {
   return (
     <header className="h-16 border-b border-border bg-card px-4 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <Link to="/dashboard" className="flex items-center gap-2">
+        <Link to="/courses" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded bg-primary flex items-center justify-center">
             <Shield className="w-5 h-5 text-primary-foreground" />
           </div>
           <span className="font-semibold text-foreground hidden sm:inline">
-            SCL OT CSIR Training
+            Training Portal
           </span>
         </Link>
       </div>
@@ -42,15 +42,9 @@ export function Header() {
         {user && (
           <>
             <Button variant="ghost" size="sm" asChild className="hidden sm:flex">
-              <Link to="/dashboard">
+              <Link to="/courses">
                 <BookOpen className="w-4 h-4 mr-2" />
-                Training
-              </Link>
-            </Button>
-            <Button variant="ghost" size="sm" asChild className="hidden sm:flex">
-              <Link to="/certificate">
-                <Award className="w-4 h-4 mr-2" />
-                Certificate
+                Courses
               </Link>
             </Button>
             
@@ -75,15 +69,9 @@ export function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild className="sm:hidden">
-                  <Link to="/dashboard">
+                  <Link to="/courses">
                     <BookOpen className="w-4 h-4 mr-2" />
-                    Training
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild className="sm:hidden">
-                  <Link to="/certificate">
-                    <Award className="w-4 h-4 mr-2" />
-                    Certificate
+                    Courses
                   </Link>
                 </DropdownMenuItem>
                 {isAdmin && (

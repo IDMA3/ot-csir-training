@@ -7,7 +7,7 @@ interface Module {
   id: string;
   sequence: number;
   title: string;
-  type: 'module' | 'exam';
+  type: 'lesson' | 'exam';
   estimated_minutes: number;
 }
 

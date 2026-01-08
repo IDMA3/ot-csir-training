@@ -94,6 +94,7 @@ export type Database = {
         Row: {
           active: boolean
           created_at: string
+          description: string | null
           duration_minutes: number
           id: string
           title: string
@@ -102,6 +103,7 @@ export type Database = {
         Insert: {
           active?: boolean
           created_at?: string
+          description?: string | null
           duration_minutes: number
           id?: string
           title: string
@@ -110,12 +112,42 @@ export type Database = {
         Update: {
           active?: boolean
           created_at?: string
+          description?: string | null
           duration_minutes?: number
           id?: string
           title?: string
           version?: string
         }
         Relationships: []
+      }
+      enrollments: {
+        Row: {
+          course_id: string
+          enrolled_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          course_id: string
+          enrolled_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          course_id?: string
+          enrolled_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "enrollments_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "course"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       modules: {
         Row: {
