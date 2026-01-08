@@ -84,8 +84,7 @@ const App = () => (
                   }
                 />
                 {/* Legacy routes - redirect to new structure */}
-                <Route path="/dashboard" element={<Navigate to="/courses" replace />} />
-                <Route path="/certificate" element={<Navigate to="/courses" replace />} />
+                <Route path="/dashboard" element={<Navigate to="/" replace />} />
                 <Route
                   path="/admin"
                   element={
