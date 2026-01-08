@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineChart, Line, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -121,6 +121,14 @@ export function AnalyticsDashboard() {
       label: 'Enrollments',
       color: 'hsl(var(--primary))',
     },
+    count: {
+      label: 'Enrollments',
+      color: 'hsl(var(--primary))',
+    },
+    value: {
+      label: 'Count',
+      color: 'hsl(var(--primary))',
+    },
   };
 
   if (isLoading) {
@@ -149,23 +157,21 @@ export function AnalyticsDashboard() {
             {enrollmentsByCoursaData.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No enrollment data available</p>
             ) : (
-              <div className="h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={enrollmentsByCoursaData} layout="vertical" margin={{ left: 20, right: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                    <XAxis type="number" />
-                    <YAxis 
-                      dataKey="name" 
-                      type="category" 
-                      width={100}
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 15)}...` : value}
-                    />
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartContainer config={chartConfig} className="h-[250px]">
+                <BarChart data={enrollmentsByCoursaData} layout="vertical" margin={{ left: 20, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                  <XAxis type="number" />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    width={100}
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 15)}...` : value}
+                  />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ChartContainer>
             )}
           </CardContent>
         </Card>
@@ -180,27 +186,25 @@ export function AnalyticsDashboard() {
             {passFailData.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No assessment data available</p>
             ) : (
-              <div className="h-[250px] flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={passFailData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={60}
-                      outerRadius={90}
-                      paddingAngle={5}
-                      dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {passFailData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.fill} />
-                      ))}
-                    </Pie>
-                    <ChartTooltip content={<ChartTooltipContent />} />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
+              <ChartContainer config={chartConfig} className="h-[250px]">
+                <PieChart>
+                  <Pie
+                    data={passFailData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {passFailData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ChartContainer>
             )}
           </CardContent>
         </Card>
