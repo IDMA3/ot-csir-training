@@ -9,7 +9,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Search, UserPlus, Trash2 } from 'lucide-react';
+import { Search, UserPlus, Trash2, Loader2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Course {
   id: string;
@@ -35,7 +45,9 @@ export function CourseAssignment() {
   const queryClient = useQueryClient();
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string>('');
+  const [bulkRemoveCourse, setBulkRemoveCourse] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showBulkRemoveDialog, setShowBulkRemoveDialog] = useState(false);
 
   // Fetch courses
   const { data: courses = [] } = useQuery({
@@ -92,10 +104,17 @@ export function CourseAssignment() {
       .map(e => e.course_id);
   };
 
+  // Get users enrolled in the bulk remove course from the selected users
+  const usersToRemove = useMemo(() => {
+    if (!bulkRemoveCourse || selectedUsers.length === 0) return [];
+    return selectedUsers.filter(userId => 
+      enrollments.some(e => e.user_id === userId && e.course_id === bulkRemoveCourse)
+    );
+  }, [bulkRemoveCourse, selectedUsers, enrollments]);
+
   // Assign mutation
   const assignMutation = useMutation({
     mutationFn: async ({ userIds, courseId }: { userIds: string[]; courseId: string }) => {
-      // Filter out users already enrolled
       const existingEnrollments = enrollments
         .filter(e => e.course_id === courseId)
         .map(e => e.user_id);
@@ -123,7 +142,7 @@ export function CourseAssignment() {
     },
   });
 
-  // Unassign mutation
+  // Unassign single user mutation
   const unassignMutation = useMutation({
     mutationFn: async ({ userId, courseId }: { userId: string; courseId: string }) => {
       const { error } = await supabase
@@ -140,6 +159,30 @@ export function CourseAssignment() {
     },
     onError: () => {
       toast.error('Failed to remove user from course');
+    },
+  });
+
+  // Bulk unassign mutation
+  const bulkUnassignMutation = useMutation({
+    mutationFn: async ({ userIds, courseId }: { userIds: string[]; courseId: string }) => {
+      const { error } = await supabase
+        .from('enrollments')
+        .delete()
+        .eq('course_id', courseId)
+        .in('user_id', userIds);
+      
+      if (error) throw error;
+      return userIds.length;
+    },
+    onSuccess: (count) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-enrollments'] });
+      toast.success(`Removed ${count} user${count !== 1 ? 's' : ''} from course`);
+      setSelectedUsers([]);
+      setBulkRemoveCourse('');
+      setShowBulkRemoveDialog(false);
+    },
+    onError: () => {
+      toast.error('Failed to remove users from course');
     },
   });
 
@@ -171,38 +214,83 @@ export function CourseAssignment() {
     assignMutation.mutate({ userIds: selectedUsers, courseId: selectedCourse });
   };
 
+  const handleBulkRemove = () => {
+    if (!bulkRemoveCourse) {
+      toast.error('Please select a course to remove users from');
+      return;
+    }
+    if (usersToRemove.length === 0) {
+      toast.error('No selected users are enrolled in this course');
+      return;
+    }
+    setShowBulkRemoveDialog(true);
+  };
+
+  const confirmBulkRemove = () => {
+    bulkUnassignMutation.mutate({ userIds: usersToRemove, courseId: bulkRemoveCourse });
+  };
+
   const allSelected = filteredProfiles.length > 0 && selectedUsers.length === filteredProfiles.length;
   const someSelected = selectedUsers.length > 0 && selectedUsers.length < filteredProfiles.length;
+  const selectedCourseName = courses.find(c => c.id === bulkRemoveCourse)?.title;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Assign Courses to Users</CardTitle>
-        <CardDescription>Select users and assign them to courses</CardDescription>
+        <CardTitle>Bulk Enrollment Management</CardTitle>
+        <CardDescription>Assign or remove multiple learners from courses at once</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Assignment Controls */}
-        <div className="flex flex-col md:flex-row gap-4 p-4 bg-muted/50 rounded-lg">
-          <Select value={selectedCourse} onValueChange={setSelectedCourse}>
-            <SelectTrigger className="w-full md:w-[300px]">
-              <SelectValue placeholder="Select a course to assign" />
-            </SelectTrigger>
-            <SelectContent>
-              {courses.map(course => (
-                <SelectItem key={course.id} value={course.id}>
-                  {course.title}
-                  {!course.active && ' (Inactive)'}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button 
-            onClick={handleAssign}
-            disabled={!selectedCourse || selectedUsers.length === 0 || assignMutation.isPending}
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Assign to {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}
-          </Button>
+        {/* Bulk Assignment Controls */}
+        <div className="flex flex-col gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="flex flex-col md:flex-row gap-4">
+            <Select value={selectedCourse} onValueChange={setSelectedCourse}>
+              <SelectTrigger className="w-full md:w-[300px]">
+                <SelectValue placeholder="Select course to assign" />
+              </SelectTrigger>
+              <SelectContent>
+                {courses.map(course => (
+                  <SelectItem key={course.id} value={course.id}>
+                    {course.title}
+                    {!course.active && ' (Inactive)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              onClick={handleAssign}
+              disabled={!selectedCourse || selectedUsers.length === 0 || assignMutation.isPending}
+            >
+              {assignMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <UserPlus className="mr-2 h-4 w-4" />
+              Assign {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}
+            </Button>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-4">
+            <Select value={bulkRemoveCourse} onValueChange={setBulkRemoveCourse}>
+              <SelectTrigger className="w-full md:w-[300px]">
+                <SelectValue placeholder="Select course to remove from" />
+              </SelectTrigger>
+              <SelectContent>
+                {courses.map(course => (
+                  <SelectItem key={course.id} value={course.id}>
+                    {course.title}
+                    {!course.active && ' (Inactive)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="destructive"
+              onClick={handleBulkRemove}
+              disabled={!bulkRemoveCourse || usersToRemove.length === 0 || bulkUnassignMutation.isPending}
+            >
+              {bulkUnassignMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <Trash2 className="mr-2 h-4 w-4" />
+              Remove {usersToRemove.length} user{usersToRemove.length !== 1 ? 's' : ''}
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -312,6 +400,30 @@ export function CourseAssignment() {
           </Table>
         </div>
       </CardContent>
+
+      {/* Bulk Remove Confirmation Dialog */}
+      <AlertDialog open={showBulkRemoveDialog} onOpenChange={setShowBulkRemoveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Users from Course</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove {usersToRemove.length} user{usersToRemove.length !== 1 ? 's' : ''} from <strong>"{selectedCourseName}"</strong>? 
+              This will unenroll them from the course and remove their progress.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmBulkRemove}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={bulkUnassignMutation.isPending}
+            >
+              {bulkUnassignMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Remove Users
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
