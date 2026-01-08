@@ -365,14 +365,83 @@ const { error } = await supabase
 
 ---
 
+## Enrollments API
+
+### Fetch User Enrollments
+```typescript
+const { data: enrollments } = await supabase
+  .from('enrollments')
+  .select('*')
+  .eq('user_id', userId);
+```
+
+**Response:**
+```typescript
+{
+  id: string;
+  user_id: string;
+  course_id: string;
+  enrolled_at: string;
+}[]
+```
+
+### Fetch All Enrollments (Admin)
+```typescript
+const { data: enrollments } = await supabase
+  .from('enrollments')
+  .select('user_id, course_id');
+```
+
+### Create Enrollment (Admin)
+```typescript
+const { error } = await supabase
+  .from('enrollments')
+  .insert({
+    user_id: userId,
+    course_id: courseId
+  });
+```
+
+### Bulk Create Enrollments (Admin)
+```typescript
+const { error } = await supabase
+  .from('enrollments')
+  .insert(
+    userIds.map(user_id => ({ user_id, course_id: courseId }))
+  );
+```
+
+### Delete Enrollment (Admin)
+```typescript
+const { error } = await supabase
+  .from('enrollments')
+  .delete()
+  .eq('user_id', userId)
+  .eq('course_id', courseId);
+```
+
+---
+
 ## Admin Queries
 
-### Fetch All Learners with Progress
+### Fetch All Learners with Progress (Course-Filtered)
 ```typescript
 // Fetch profiles
 const { data: profiles } = await supabase
   .from('profiles')
   .select('*');
+
+// Fetch enrollments
+const { data: enrollments } = await supabase
+  .from('enrollments')
+  .select('user_id, course_id');
+
+// Fetch modules (optionally filter by course)
+let modulesQuery = supabase.from('modules').select('id, course_id, type');
+if (courseFilter !== 'all') {
+  modulesQuery = modulesQuery.eq('course_id', courseFilter);
+}
+const { data: modules } = await modulesQuery;
 
 // Fetch all progress
 const { data: progress } = await supabase
@@ -384,12 +453,14 @@ const { data: attempts } = await supabase
   .from('attempts')
   .select('*');
 
-// Fetch all certificates
-const { data: certificates } = await supabase
-  .from('certificates')
-  .select('*');
+// Fetch certificates (optionally filter by course)
+let certificatesQuery = supabase.from('certificates').select('*');
+if (courseFilter !== 'all') {
+  certificatesQuery = certificatesQuery.eq('course_id', courseFilter);
+}
+const { data: certificates } = await certificatesQuery;
 
-// Combine in application code
+// Filter and combine in application code
 ```
 
 ### Fetch All Users with Roles

@@ -15,16 +15,36 @@ import { cn } from '@/lib/utils';
 import { LearnerReportTable, type LearnerReport } from '@/components/admin/LearnerReportTable';
 import { AdminUserManagement } from '@/components/admin/AdminUserManagement';
 import { CourseManagement } from '@/components/admin/CourseManagement';
+import { CourseAssignment } from '@/components/admin/CourseAssignment';
+
+interface Course {
+  id: string;
+  title: string;
+}
 
 export default function Admin() {
   const [nameFilter, setNameFilter] = useState('');
   const [organizationFilter, setOrganizationFilter] = useState<string>('all');
+  const [courseFilter, setCourseFilter] = useState<string>('all');
   const [startDate, setStartDate] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState<Date | undefined>(undefined);
 
+  // Fetch all courses for filter dropdown
+  const { data: courses = [] } = useQuery({
+    queryKey: ['admin-courses-filter'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('course')
+        .select('id, title')
+        .order('title');
+      if (error) throw error;
+      return data as Course[];
+    },
+  });
+
   // Fetch all learners with their progress
   const { data: learners = [], isLoading } = useQuery({
-    queryKey: ['admin-learners'],
+    queryKey: ['admin-learners', courseFilter],
     queryFn: async () => {
       // Get all profiles
       const { data: profiles, error: profilesError } = await supabase
@@ -33,44 +53,68 @@ export default function Admin() {
       
       if (profilesError) throw profilesError;
 
-      // Get total modules count
-      const { data: modules } = await supabase
+      // Get enrollments
+      const { data: enrollments } = await supabase
+        .from('enrollments')
+        .select('user_id, course_id');
+
+      // Get modules (filtered by course if selected)
+      let modulesQuery = supabase
         .from('modules')
-        .select('id');
+        .select('id, course_id, type');
       
+      if (courseFilter !== 'all') {
+        modulesQuery = modulesQuery.eq('course_id', courseFilter);
+      }
+      
+      const { data: modules } = await modulesQuery;
+      const moduleIds = modules?.map(m => m.id) || [];
       const totalModules = modules?.length || 0;
 
-      // Get all progress records
+      // Get all progress records (filtered to relevant modules)
       const { data: allProgress } = await supabase
         .from('progress')
         .select('*');
+
+      // Filter progress to only relevant modules
+      const relevantProgress = allProgress?.filter(p => moduleIds.includes(p.module_id)) || [];
 
       // Get all attempts (for exam scores)
       const { data: allAttempts } = await supabase
         .from('attempts')
         .select('*');
 
-      // Get all certificates
-      const { data: allCertificates } = await supabase
-        .from('certificates')
-        .select('*');
+      // Filter attempts to only relevant modules
+      const relevantAttempts = allAttempts?.filter(a => moduleIds.includes(a.module_id)) || [];
 
-      // Get exam module id
-      const { data: examModule } = await supabase
-        .from('modules')
-        .select('id')
-        .eq('type', 'exam')
-        .maybeSingle();
+      // Get all certificates
+      let certificatesQuery = supabase.from('certificates').select('*');
+      if (courseFilter !== 'all') {
+        certificatesQuery = certificatesQuery.eq('course_id', courseFilter);
+      }
+      const { data: allCertificates } = await certificatesQuery;
+
+      // Get exam modules
+      const examModuleIds = modules?.filter(m => m.type === 'exam').map(m => m.id) || [];
+
+      // Filter profiles by course enrollment if course filter is active
+      let filteredProfiles = profiles;
+      if (courseFilter !== 'all') {
+        const enrolledUserIds = enrollments
+          ?.filter(e => e.course_id === courseFilter)
+          .map(e => e.user_id) || [];
+        filteredProfiles = profiles?.filter(p => enrolledUserIds.includes(p.id));
+      }
 
       // Build learner reports
-      const reports: LearnerReport[] = profiles?.map(profile => {
-        const userProgress = allProgress?.filter(p => p.user_id === profile.id) || [];
+      const reports: LearnerReport[] = filteredProfiles?.map(profile => {
+        const userProgress = relevantProgress.filter(p => p.user_id === profile.id);
         const completedModules = userProgress.filter(p => p.completed);
         
-        // Get best exam score
-        const examAttempts = allAttempts?.filter(
-          a => a.user_id === profile.id && a.module_id === examModule?.id
-        ) || [];
+        // Get best exam score from relevant exams
+        const examAttempts = relevantAttempts.filter(
+          a => a.user_id === profile.id && examModuleIds.includes(a.module_id)
+        );
         const bestExamScore = examAttempts.length > 0
           ? Math.max(...examAttempts.map(a => Number(a.score)))
           : null;
@@ -86,9 +130,13 @@ export default function Admin() {
           ? new Date(Math.max(...completionDates.map(d => d.getTime())))
           : null;
 
+        // Get enrolled courses for this user
+        const userEnrollments = enrollments?.filter(e => e.user_id === profile.id) || [];
+        const enrolledCourseIds = userEnrollments.map(e => e.course_id);
+
         return {
           id: profile.id,
-          email: '', // We'll fetch this separately if needed
+          email: '',
           first_name: profile.first_name,
           last_name: profile.last_name,
           organization: profile.organization,
@@ -102,6 +150,7 @@ export default function Admin() {
           best_exam_score: bestExamScore,
           certificate_id: userCert?.certificate_id || null,
           completion_date: latestCompletion?.toISOString() || null,
+          enrolled_courses: enrolledCourseIds,
         };
       }) || [];
 
@@ -148,23 +197,29 @@ export default function Admin() {
     });
   }, [learners, nameFilter, organizationFilter, startDate, endDate]);
 
-  const hasActiveFilters = nameFilter || organizationFilter !== 'all' || startDate || endDate;
+  const hasActiveFilters = nameFilter || organizationFilter !== 'all' || courseFilter !== 'all' || startDate || endDate;
 
   const clearFilters = () => {
     setNameFilter('');
     setOrganizationFilter('all');
+    setCourseFilter('all');
     setStartDate(undefined);
     setEndDate(undefined);
   };
 
   // Export to CSV
   const exportCSV = () => {
-    const headers = ['Name', 'Email', 'Organization', 'Job Role', 'Completion %', 'Exam Score', 'Certificate ID', 'Completion Date'];
+    const selectedCourseName = courseFilter !== 'all' 
+      ? courses.find(c => c.id === courseFilter)?.title || 'Unknown'
+      : 'All Courses';
+    
+    const headers = ['Name', 'Email', 'Organization', 'Job Role', 'Course', 'Completion %', 'Exam Score', 'Certificate ID', 'Completion Date'];
     const rows = filteredLearners.map(l => [
       `${l.first_name} ${l.last_name}`,
       l.email || '',
       l.organization || '',
       l.job_role || '',
+      selectedCourseName,
       `${l.completion_percentage}%`,
       l.best_exam_score !== null ? `${Math.round(l.best_exam_score * 100)}%` : 'N/A',
       l.certificate_id || '',
@@ -250,7 +305,7 @@ export default function Admin() {
             <Card>
               <CardHeader>
                 <CardTitle>Filters</CardTitle>
-                <CardDescription>Filter learners by name, organization, or completion date range</CardDescription>
+                <CardDescription>Filter learners by name, organization, course, or completion date range</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col gap-4">
@@ -275,6 +330,19 @@ export default function Admin() {
                         <SelectItem value="all">All organizations</SelectItem>
                         {organizations.map(org => (
                           <SelectItem key={org} value={org}>{org}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Course Dropdown */}
+                    <Select value={courseFilter} onValueChange={setCourseFilter}>
+                      <SelectTrigger className="w-full md:w-[250px]">
+                        <SelectValue placeholder="All courses" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All courses</SelectItem>
+                        {courses.map(course => (
+                          <SelectItem key={course.id} value={course.id}>{course.title}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -335,12 +403,18 @@ export default function Admin() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <LearnerReportTable learners={filteredLearners} isLoading={isLoading} />
+                <LearnerReportTable 
+                  learners={filteredLearners} 
+                  isLoading={isLoading} 
+                  courseFilter={courseFilter}
+                  courses={courses}
+                />
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="courses">
+          <TabsContent value="courses" className="space-y-6">
+            <CourseAssignment />
             <CourseManagement />
           </TabsContent>
 
