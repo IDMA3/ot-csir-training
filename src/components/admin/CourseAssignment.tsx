@@ -20,6 +20,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useAdminPermissions } from '@/hooks/useAdminPermissions';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Course {
   id: string;
@@ -32,6 +34,7 @@ interface Profile {
   first_name: string;
   last_name: string;
   organization: string | null;
+  organization_id: string | null;
 }
 
 interface Enrollment {
@@ -43,33 +46,71 @@ interface Enrollment {
 
 export function CourseAssignment() {
   const queryClient = useQueryClient();
+  const { isSuperAdmin } = useAdminPermissions();
+  const { profile: currentUserProfile } = useAuth();
+  
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<string>('');
   const [bulkRemoveCourse, setBulkRemoveCourse] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [showBulkRemoveDialog, setShowBulkRemoveDialog] = useState(false);
 
-  // Fetch courses
+  // Fetch courses - filtered for org admins
   const { data: courses = [] } = useQuery({
-    queryKey: ['admin-courses'],
+    queryKey: ['admin-courses-for-assignment', isSuperAdmin, currentUserProfile?.organization_id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('course')
-        .select('id, title, active')
-        .order('title');
-      if (error) throw error;
-      return data as Course[];
+      if (isSuperAdmin) {
+        // Super admin sees all courses
+        const { data, error } = await supabase
+          .from('course')
+          .select('id, title, active')
+          .order('title');
+        if (error) throw error;
+        return data as Course[];
+      } else if (currentUserProfile?.organization_id) {
+        // Org admin sees assigned courses + courses created by their org
+        const { data: orgCourses } = await supabase
+          .from('organization_courses')
+          .select('course_id')
+          .eq('organization_id', currentUserProfile.organization_id);
+        
+        const assignedIds = orgCourses?.map(oc => oc.course_id) || [];
+        
+        // Build query - either creator org matches OR in assigned list
+        let query = supabase
+          .from('course')
+          .select('id, title, active')
+          .order('title');
+        
+        if (assignedIds.length > 0) {
+          query = query.or(`creator_organization_id.eq.${currentUserProfile.organization_id},id.in.(${assignedIds.join(',')})`);
+        } else {
+          query = query.eq('creator_organization_id', currentUserProfile.organization_id);
+        }
+        
+        const { data, error } = await query;
+        if (error) throw error;
+        return data as Course[];
+      }
+      return [];
     },
   });
 
-  // Fetch all profiles
+  // Fetch profiles - filtered for org admins
   const { data: profiles = [] } = useQuery({
-    queryKey: ['admin-profiles'],
+    queryKey: ['admin-profiles-for-assignment', isSuperAdmin, currentUserProfile?.organization_id],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
-        .select('id, first_name, last_name, organization')
+        .select('id, first_name, last_name, organization, organization_id')
         .order('last_name');
+      
+      // Org admins only see their org's users
+      if (!isSuperAdmin && currentUserProfile?.organization_id) {
+        query = query.eq('organization_id', currentUserProfile.organization_id);
+      }
+      
+      const { data, error } = await query;
       if (error) throw error;
       return data as Profile[];
     },
@@ -237,8 +278,15 @@ export function CourseAssignment() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Bulk Enrollment Management</CardTitle>
-        <CardDescription>Assign or remove multiple learners from courses at once</CardDescription>
+        <CardTitle>
+          {isSuperAdmin ? 'Bulk Enrollment Management' : 'Enroll Users in Courses'}
+        </CardTitle>
+        <CardDescription>
+          {isSuperAdmin 
+            ? 'Assign or remove any learners from any courses'
+            : 'Manage course enrollments for your organization'
+          }
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Bulk Assignment Controls */}
