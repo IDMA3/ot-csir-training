@@ -52,6 +52,10 @@ export function useAdminPermissions() {
   const canAccessAnalytics = isSuperAdmin || canViewUsers;
   const canAccessCourses = isSuperAdmin || canManageCourses;
   const canAccessAdminManagement = isSuperAdmin;
+  
+  // User deletion permission - super admins can delete anyone except other super admins
+  // Org admins with can_manage_users can delete users in their org
+  const canDeleteUsers = isSuperAdmin || canManageUsers;
 
   return {
     permissions,
@@ -67,5 +71,6 @@ export function useAdminPermissions() {
     canAccessAnalytics,
     canAccessCourses,
     canAccessAdminManagement,
+    canDeleteUsers,
   };
 }

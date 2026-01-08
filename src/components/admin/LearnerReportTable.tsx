@@ -3,7 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Eye } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Eye, Trash2 } from 'lucide-react';
 import { LearnerDetailView } from './LearnerDetailView';
 
 export interface LearnerReport {
@@ -33,9 +34,20 @@ interface LearnerReportTableProps {
   isLoading: boolean;
   courseFilter?: string;
   courses?: Course[];
+  canDeleteUsers?: boolean;
+  onDeleteUser?: (userId: string, userName: string) => void;
+  deletingUserId?: string | null;
 }
 
-export function LearnerReportTable({ learners, isLoading, courseFilter, courses = [] }: LearnerReportTableProps) {
+export function LearnerReportTable({ 
+  learners, 
+  isLoading, 
+  courseFilter, 
+  courses = [],
+  canDeleteUsers = false,
+  onDeleteUser,
+  deletingUserId,
+}: LearnerReportTableProps) {
   const selectedCourseName = courseFilter && courseFilter !== 'all' 
     ? courses.find(c => c.id === courseFilter)?.title 
     : null;
@@ -110,21 +122,70 @@ export function LearnerReportTable({ learners, isLoading, courseFilter, courses 
                 )}
               </TableCell>
               <TableCell>
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {learner.first_name} {learner.last_name}
-                      </DialogTitle>
-                    </DialogHeader>
-                    <LearnerDetailView userId={learner.id} learner={learner} />
-                  </DialogContent>
-                </Dialog>
+                <div className="flex items-center gap-1">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>
+                          {learner.first_name} {learner.last_name}
+                        </DialogTitle>
+                      </DialogHeader>
+                      <LearnerDetailView userId={learner.id} learner={learner} />
+                    </DialogContent>
+                  </Dialog>
+                  
+                  {canDeleteUsers && onDeleteUser && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                          disabled={deletingUserId === learner.id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete User</AlertDialogTitle>
+                          <AlertDialogDescription className="space-y-2">
+                            <p>
+                              Are you sure you want to permanently delete{' '}
+                              <strong>{learner.first_name} {learner.last_name}</strong>?
+                            </p>
+                            <p className="text-sm">
+                              This will remove all their data including:
+                            </p>
+                            <ul className="text-sm list-disc list-inside">
+                              <li>Profile information</li>
+                              <li>Course progress ({learner.modules_completed} modules)</li>
+                              <li>Exam attempts</li>
+                              {learner.certificate_id && <li>Certificates</li>}
+                            </ul>
+                            <p className="text-destructive font-medium mt-2">
+                              This action cannot be undone.
+                            </p>
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            onClick={() => onDeleteUser(learner.id, `${learner.first_name} ${learner.last_name}`)}
+                          >
+                            Delete User
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
               </TableCell>
             </TableRow>
           ))}
