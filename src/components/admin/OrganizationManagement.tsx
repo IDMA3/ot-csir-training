@@ -613,6 +613,7 @@ export function OrganizationManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Organization</TableHead>
+                  <TableHead>Domain</TableHead>
                   <TableHead>Users</TableHead>
                   <TableHead>Courses</TableHead>
                   <TableHead>Status</TableHead>
@@ -646,6 +647,13 @@ export function OrganizationManagement() {
                           )}
                         </div>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {org.domain ? (
+                        <code className="text-xs bg-muted px-2 py-1 rounded">@{org.domain}</code>
+                      ) : (
+                        <span className="text-muted-foreground">-</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">

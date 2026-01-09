@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 interface OrgMetrics {
   id: string;
   name: string;
+  domain: string | null;
   userCount: number;
   maxUsers: number | null;
   enrollments: number;
@@ -36,7 +37,7 @@ export function OrganizationReports() {
     queryKey: ['organization-reports'],
     queryFn: async () => {
       const [orgsRes, profilesRes, enrollmentsRes, progressRes, attemptsRes, certificatesRes, modulesRes] = await Promise.all([
-        supabase.from('organizations').select('id, name, max_users').eq('active', true),
+        supabase.from('organizations').select('id, name, max_users, domain').eq('active', true),
         supabase.from('profiles').select('id, organization_id, organization, created_at'),
         supabase.from('enrollments').select('id, user_id, course_id, enrolled_at'),
         supabase.from('progress').select('id, user_id, module_id, completed, completed_at'),
@@ -115,6 +116,7 @@ export function OrganizationReports() {
       return {
         id: org.id,
         name: org.name,
+        domain: org.domain,
         userCount: orgUsers.length,
         maxUsers: org.max_users,
         enrollments: orgEnrollments.length,
@@ -204,9 +206,10 @@ export function OrganizationReports() {
     
     exportToCSV({
       filename: `org-report-${selectedOrgName.toLowerCase().replace(/\s+/g, '-')}-${format(new Date(), 'yyyy-MM-dd')}`,
-      headers: ['Organization', 'Users', 'Max Users', 'Active (30d)', 'Enrollments', 'Modules Completed', 'Completion Rate %', 'Avg Score %', 'Pass Rate %', 'Certificates'],
+      headers: ['Organization', 'Domain', 'Users', 'Max Users', 'Active (30d)', 'Enrollments', 'Modules Completed', 'Completion Rate %', 'Avg Score %', 'Pass Rate %', 'Certificates'],
       rows: displayedMetrics.map(org => [
         org.name,
+        org.domain || '',
         org.userCount,
         org.maxUsers || 'Unlimited',
         org.activeThisMonth,
@@ -350,6 +353,7 @@ export function OrganizationReports() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Organization</TableHead>
+                    <TableHead>Domain</TableHead>
                     <TableHead className="text-right">Users</TableHead>
                     <TableHead className="text-right">Completion</TableHead>
                     <TableHead className="text-right">Pass Rate</TableHead>
@@ -363,6 +367,13 @@ export function OrganizationReports() {
                           <Building2 className="h-4 w-4 text-muted-foreground" />
                           <span className="font-medium truncate max-w-[120px]">{org.name}</span>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        {org.domain ? (
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">@{org.domain}</code>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <Badge variant="secondary">
@@ -403,6 +414,7 @@ export function OrganizationReports() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Organization</TableHead>
+                  <TableHead>Domain</TableHead>
                   <TableHead className="text-right">Users</TableHead>
                   <TableHead className="text-right">Active (30d)</TableHead>
                   <TableHead className="text-right">Enrollments</TableHead>
@@ -421,6 +433,13 @@ export function OrganizationReports() {
                         <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <span className="font-medium">{org.name}</span>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {org.domain ? (
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">@{org.domain}</code>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">-</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right">
                       {org.userCount}{org.maxUsers ? ` / ${org.maxUsers}` : ''}
