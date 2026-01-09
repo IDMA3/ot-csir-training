@@ -283,6 +283,7 @@ export type Database = {
           active: boolean
           created_at: string
           description: string | null
+          domain: string | null
           id: string
           logo_url: string | null
           max_users: number | null
@@ -295,6 +296,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           description?: string | null
+          domain?: string | null
           id?: string
           logo_url?: string | null
           max_users?: number | null
@@ -307,6 +309,7 @@ export type Database = {
           active?: boolean
           created_at?: string
           description?: string | null
+          domain?: string | null
           id?: string
           logo_url?: string | null
           max_users?: number | null
