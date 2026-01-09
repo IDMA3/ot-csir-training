@@ -269,8 +269,8 @@ export default function AuthPage() {
           <div className="w-12 h-12 rounded bg-primary mx-auto flex items-center justify-center mb-4">
             <Shield className="w-7 h-7 text-primary-foreground" />
           </div>
-          <CardTitle className="text-2xl">SCL OT CSIR Training</CardTitle>
-          <CardDescription>Operational Technology Cyber Security Incident Response</CardDescription>
+          <CardTitle className="text-2xl">IDMA3 Training Platform</CardTitle>
+          <CardDescription>Access your training courses and certifications</CardDescription>
         </CardHeader>
         <CardContent>
           {/* Invitation Error Alert */}
