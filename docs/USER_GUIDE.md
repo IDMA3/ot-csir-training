@@ -237,9 +237,21 @@ Everything org admins can do, plus:
 #### Creating an Organization
 
 1. Click **Add Organization**
-2. Enter organization details
-3. Set maximum user limit (optional)
-4. Click **Create**
+2. Enter organization details:
+   - Organization name
+   - Description (optional)
+   - Maximum user limit (optional)
+   - Email domain for auto-assignment (optional, e.g., "idma3.com")
+   - Logo and brand color (optional)
+3. Click **Create**
+
+#### Configuring Email Domain Auto-Assignment
+
+1. Edit an organization
+2. Enter the **Email Domain** (e.g., "idma3.com" - without the @)
+3. Save changes
+
+Users who sign up with matching email domains will automatically be assigned to this organization. The domain is also displayed in the Organizations table and included in CSV exports for reference.
 
 #### Assigning Courses
 

@@ -20,6 +20,7 @@ Stores organization/company information for multi-tenancy.
 | `logo_url` | text | Yes | - | Logo image URL |
 | `primary_color` | text | Yes | `'#3b82f6'` | Brand color |
 | `max_users` | integer | Yes | - | User limit |
+| `domain` | text | Yes | - | Email domain for auto-assignment (e.g., "idma3.com") |
 | `active` | boolean | No | `true` | Active status |
 | `settings` | jsonb | Yes | `'{}'` | Custom settings |
 | `created_at` | timestamptz | No | `now()` | Creation timestamp |
@@ -351,7 +352,9 @@ Checks if admin can view users for a specific organization.
 Checks if admin can manage courses for a specific organization.
 
 ### `handle_new_user() → trigger`
-Automatically creates profile and assigns 'learner' role on user signup.
+Automatically creates profile and assigns 'learner' role on user signup. Also **auto-assigns organization** based on:
+1. Exact organization name match (case-insensitive) from user metadata
+2. Email domain match against `organizations.domain` (if no name match found)
 
 ### `assign_admin_for_email() → trigger`
 Auto-assigns admin role for specific email addresses.
