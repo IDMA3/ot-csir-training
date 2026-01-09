@@ -500,6 +500,51 @@ export function PeopleManagement() {
     }
   };
 
+  // Single user enroll handler for inline actions
+  const handleEnrollUser = async (userId: string, courseIds: string[]) => {
+    try {
+      for (const courseId of courseIds) {
+        const { data: existing } = await supabase
+          .from('enrollments')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('course_id', courseId)
+          .maybeSingle();
+
+        if (!existing) {
+          const { error } = await supabase
+            .from('enrollments')
+            .insert({ user_id: userId, course_id: courseId });
+          if (error) throw error;
+        }
+      }
+      toast.success('Enrolled successfully');
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    } catch (err) {
+      console.error('Error enrolling user:', err);
+      toast.error('Failed to enroll user');
+    }
+  };
+
+  // Single user unenroll handler for inline actions
+  const handleUnenrollUser = async (userId: string, courseIds: string[]) => {
+    try {
+      for (const courseId of courseIds) {
+        const { error } = await supabase
+          .from('enrollments')
+          .delete()
+          .eq('user_id', userId)
+          .eq('course_id', courseId);
+        if (error) throw error;
+      }
+      toast.success('Removed from course');
+      queryClient.invalidateQueries({ queryKey: ['admin-learners'] });
+    } catch (err) {
+      console.error('Error unenrolling user:', err);
+      toast.error('Failed to remove from course');
+    }
+  };
+
   const handleBulkAssignOrg = async (orgId: string | null) => {
     setIsProcessingBulk(true);
     const userIds = Array.from(selectedUserIds);
@@ -702,6 +747,9 @@ export function PeopleManagement() {
             onSelectionChange={handleSelectionChange}
             onSelectAll={handleSelectAll}
             showSelection={true}
+            onEnrollUser={handleEnrollUser}
+            onUnenrollUser={handleUnenrollUser}
+            showEnrollments={true}
           />
         </CardContent>
       </Card>

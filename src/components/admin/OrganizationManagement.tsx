@@ -14,7 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus, Pencil, Trash2, Building2, Users, Loader2, Settings, Upload, X, Palette, BookOpen, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Building2, Users, Loader2, Settings, Upload, X, Palette, BookOpen, RefreshCw, Search } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { RecertificationSettings } from './RecertificationSettings';
@@ -57,6 +58,8 @@ export function OrganizationManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState<OrganizationWithStats | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<FormData>({
     name: '',
@@ -266,6 +269,36 @@ export function OrganizationManagement() {
     onError: (error: Error) => {
       toast.error(`Failed to delete organization: ${error.message}`);
     },
+  });
+
+  // Toggle organization status inline
+  const toggleOrgStatus = async (orgId: string, active: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .update({ active })
+        .eq('id', orgId);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ['admin-organizations'] });
+      toast.success(`Organization ${active ? 'activated' : 'deactivated'}`);
+    } catch (error: any) {
+      toast.error(`Failed to update status: ${error.message}`);
+    }
+  };
+
+  // Filter organizations based on search and status
+  const filteredOrganizations = organizations.filter(org => {
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      if (!org.name.toLowerCase().includes(query) && 
+          !(org.domain?.toLowerCase().includes(query)) &&
+          !(org.description?.toLowerCase().includes(query))) {
+        return false;
+      }
+    }
+    if (statusFilter === 'active' && !org.active) return false;
+    if (statusFilter === 'inactive' && org.active) return false;
+    return true;
   });
 
   const resetForm = () => {
@@ -598,15 +631,38 @@ export function OrganizationManagement() {
             </Dialog>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {/* Search and Filter */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search organizations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-full sm:w-[150px]">
+                <SelectValue placeholder="All statuses" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : organizations.length === 0 ? (
+          ) : filteredOrganizations.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No organizations yet. Create your first organization to get started.</p>
+              <p>{searchQuery || statusFilter !== 'all' ? 'No organizations match your filters.' : 'No organizations yet. Create your first organization to get started.'}</p>
             </div>
           ) : (
             <Table>
@@ -622,7 +678,7 @@ export function OrganizationManagement() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {organizations.map((org) => (
+                {filteredOrganizations.map((org) => (
                   <TableRow key={org.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
@@ -671,9 +727,11 @@ export function OrganizationManagement() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={org.active ? 'default' : 'secondary'}>
-                        {org.active ? 'Active' : 'Inactive'}
-                      </Badge>
+                      <Switch 
+                        checked={org.active}
+                        onCheckedChange={(checked) => toggleOrgStatus(org.id, checked)}
+                        aria-label={`Toggle ${org.name} status`}
+                      />
                     </TableCell>
                     <TableCell>{format(new Date(org.created_at), 'MMM d, yyyy')}</TableCell>
                     <TableCell className="text-right">
