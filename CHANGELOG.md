@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Email domain field (`domain`) for organizations enabling automatic user assignment on signup
+- Domain column displayed in Organizations management table for quick reference
+- Domain included in Organization Reports tables and CSV exports
+- Automatic organization assignment on signup via organization name or email domain matching
 - Comprehensive documentation suite
   - INDEX.md - Documentation navigation hub
   - EDGE_FUNCTIONS.md - Backend function documentation
@@ -22,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CHANGELOG.md - Version history
 
 ### Changed
+- Updated `handle_new_user` database function to support organization auto-assignment by email domain
+- Organization Reports now fetch and display the domain field in all tables
+- CSV exports include organization domain information
 - Updated README.md with project-specific information
 - Updated DATABASE.md with complete schema documentation
 - Updated DEPLOYMENT.md with GitHub Pages configuration

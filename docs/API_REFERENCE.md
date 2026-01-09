@@ -337,9 +337,35 @@ const { data: profile } = await supabase
   first_name: string;
   last_name: string;
   organization: string | null;
+  organization_id: string | null;
   job_role: string | null;
   created_at: string;
 }
+```
+
+---
+
+## Organizations API
+
+### Fetch All Organizations (Admin)
+```typescript
+const { data: organizations } = await supabase
+  .from('organizations')
+  .select('id, name, description, domain, max_users, active, primary_color, logo_url');
+```
+
+**Response:**
+```typescript
+{
+  id: string;
+  name: string;
+  description: string | null;
+  domain: string | null;  // Email domain for auto-assignment
+  max_users: number | null;
+  active: boolean;
+  primary_color: string | null;
+  logo_url: string | null;
+}[]
 ```
 
 ---
