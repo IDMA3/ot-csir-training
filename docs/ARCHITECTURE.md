@@ -6,49 +6,84 @@
 src/
 ├── components/
 │   ├── admin/                 # Admin-specific components
+│   │   ├── AdminDashboardOverview.tsx
+│   │   ├── AdminPermissionManager.tsx
 │   │   ├── AdminUserManagement.tsx
+│   │   ├── AnalyticsDashboard.tsx
+│   │   ├── BulkActionsBar.tsx
+│   │   ├── BulkUserImport.tsx
 │   │   ├── CourseAssignment.tsx
 │   │   ├── CourseManagement.tsx
 │   │   ├── LearnerDetailView.tsx
 │   │   ├── LearnerReportTable.tsx
 │   │   ├── ModuleEditor.tsx
+│   │   ├── OnboardingCenter.tsx
+│   │   ├── OrgCourseAccessManager.tsx
+│   │   ├── OrganizationManagement.tsx
+│   │   ├── OrganizationReports.tsx
+│   │   ├── PeopleManagement.tsx
 │   │   ├── QuestionEditor.tsx
-│   │   └── RichTextEditor.tsx
-│   ├── ui/                    # shadcn/ui components
-│   │   ├── button.tsx
-│   │   ├── card.tsx
-│   │   ├── checkbox.tsx
-│   │   ├── dialog.tsx
-│   │   └── ... (50+ components)
-│   ├── Header.tsx             # Global navigation header
-│   ├── MobileModuleDrawer.tsx # Mobile module navigation
-│   ├── ModuleContent.tsx      # Lesson/quiz content renderer
-│   ├── ModuleSidebar.tsx      # Desktop module navigation
-│   ├── NavLink.tsx            # Navigation link component
-│   └── ProtectedRoute.tsx     # Auth route guard
+│   │   ├── RecertificationSettings.tsx
+│   │   ├── RichTextEditor.tsx
+│   │   ├── SingleUserInvite.tsx
+│   │   ├── UserInvitations.tsx
+│   │   └── UserOrganizationManager.tsx
+│   ├── landing/               # Role-based landing pages
+│   │   ├── OrgAdminLanding.tsx
+│   │   ├── SuperAdminLanding.tsx
+│   │   └── UserLanding.tsx
+│   ├── ui/                    # shadcn/ui components (50+)
+│   ├── CourseCard.tsx
+│   ├── EmptyState.tsx
+│   ├── ErrorBoundary.tsx
+│   ├── Header.tsx
+│   ├── LoadingSkeleton.tsx
+│   ├── MobileModuleDrawer.tsx
+│   ├── ModuleContent.tsx
+│   ├── ModuleSidebar.tsx
+│   ├── NavLink.tsx
+│   ├── PasswordStrengthIndicator.tsx
+│   ├── ProtectedRoute.tsx
+│   └── SkipLink.tsx
 ├── hooks/
-│   ├── useAuth.tsx            # Authentication state & methods
-│   ├── useCourse.tsx          # Course data & mutations
-│   ├── use-mobile.tsx         # Mobile detection
-│   └── use-toast.ts           # Toast notifications
-├── integrations/
-│   └── supabase/
-│       ├── client.ts          # Supabase client (auto-generated)
-│       └── types.ts           # Database types (auto-generated)
+│   ├── useAdminFilters.tsx
+│   ├── useAdminLearnerData.tsx
+│   ├── useAdminPermissions.tsx
+│   ├── useAuth.tsx
+│   ├── useCourse.tsx
+│   ├── useDebounce.tsx
+│   ├── use-mobile.tsx
+│   ├── useOrganizationCourses.tsx
+│   ├── usePlatformStats.tsx
+│   ├── useRecertification.tsx
+│   └── use-toast.ts
+├── integrations/supabase/
+│   ├── client.ts              # Supabase client (auto-generated)
+│   └── types.ts               # Database types (auto-generated)
 ├── lib/
-│   └── utils.ts               # Utility functions (cn, etc.)
+│   ├── csv-export.ts
+│   └── utils.ts
 ├── pages/
-│   ├── Admin.tsx              # Admin dashboard
-│   ├── Auth.tsx               # Login/signup page
-│   ├── Certificate.tsx        # Certificate display
-│   ├── Dashboard.tsx          # Main course view
-│   ├── Index.tsx              # Landing page
-│   ├── NotFound.tsx           # 404 page
-│   └── Verify.tsx             # Certificate verification
-├── App.tsx                    # Root component & routing
-├── App.css                    # Global styles
-├── index.css                  # Tailwind & design tokens
-└── main.tsx                   # Application entry point
+│   ├── Admin.tsx
+│   ├── Auth.tsx
+│   ├── Certificate.tsx
+│   ├── CoursePreview.tsx
+│   ├── Courses.tsx
+│   ├── Dashboard.tsx
+│   ├── Index.tsx
+│   ├── NotFound.tsx
+│   └── Verify.tsx
+├── App.tsx
+├── App.css
+├── index.css
+└── main.tsx
+
+supabase/
+├── functions/
+│   ├── accept-invitation/     # Process invitation acceptance
+│   ├── delete-user/           # Cascade user deletion
+│   └── send-invitation/       # Email invitations via Resend
+└── config.toml
 ```
 
 ---
