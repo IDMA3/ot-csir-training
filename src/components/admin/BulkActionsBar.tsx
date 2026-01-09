@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Trash2, RotateCcw, BookPlus, BookMinus, X, Building2 } from 'lucide-react';
 
 interface Course {
@@ -50,6 +52,10 @@ export function BulkActionsBar({
   const [unenrollCourseIds, setUnenrollCourseIds] = useState<Set<string>>(new Set());
   const [resetCourseId, setResetCourseId] = useState<string>('all');
   const [assignOrgId, setAssignOrgId] = useState<string>('');
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [unenrollOpen, setUnenrollOpen] = useState(false);
+  const [orgOpen, setOrgOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
 
   if (selectedCount === 0) return null;
 
@@ -71,6 +77,30 @@ export function BulkActionsBar({
     setFn(next);
   };
 
+  const handleEnroll = () => {
+    onBulkEnroll(Array.from(selectedCourseIds));
+    setSelectedCourseIds(new Set());
+    setEnrollOpen(false);
+  };
+
+  const handleUnenroll = () => {
+    onBulkUnenroll(Array.from(unenrollCourseIds));
+    setUnenrollCourseIds(new Set());
+    setUnenrollOpen(false);
+  };
+
+  const handleAssignOrg = () => {
+    onBulkAssignOrg(assignOrgId === 'none' ? null : assignOrgId);
+    setAssignOrgId('');
+    setOrgOpen(false);
+  };
+
+  const handleReset = () => {
+    onBulkResetProgress(resetCourseId === 'all' ? undefined : resetCourseId);
+    setResetCourseId('all');
+    setResetOpen(false);
+  };
+
   return (
     <div className="sticky top-0 z-10 bg-primary text-primary-foreground rounded-lg p-4 flex items-center justify-between gap-4 shadow-lg animate-in slide-in-from-top-2">
       <div className="flex items-center gap-3">
@@ -89,9 +119,9 @@ export function BulkActionsBar({
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Bulk Enroll - Multi-select */}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+        {/* Bulk Enroll - Popover */}
+        <Popover open={enrollOpen} onOpenChange={setEnrollOpen}>
+          <PopoverTrigger asChild>
             <Button
               variant="secondary"
               size="sm"
@@ -99,52 +129,52 @@ export function BulkActionsBar({
               onClick={() => setSelectedCourseIds(new Set())}
             >
               <BookPlus className="h-4 w-4 mr-2" />
-              Enroll in Courses
+              Enroll
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="max-h-[80vh] flex flex-col">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Enroll Users in Courses</AlertDialogTitle>
-              <AlertDialogDescription>
-                Select one or more courses to enroll {selectedCount} {selectedCount === 1 ? 'user' : 'users'} in.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4 space-y-2 max-h-60 overflow-auto flex-1">
-              {courses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No courses available.</p>
-              ) : (
-                courses.map(course => (
-                  <label 
-                    key={course.id} 
-                    className="flex items-center gap-3 p-2 hover:bg-muted rounded cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={selectedCourseIds.has(course.id)}
-                      onCheckedChange={() => toggleCourseSelection(course.id, selectedCourseIds, setSelectedCourseIds)}
-                    />
-                    <span className="text-sm">{course.title}</span>
-                  </label>
-                ))
-              )}
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="end">
+            <div className="p-3 border-b">
+              <p className="font-medium text-sm">Enroll in Courses</p>
+              <p className="text-xs text-muted-foreground">
+                Select courses for {selectedCount} {selectedCount === 1 ? 'user' : 'users'}
+              </p>
             </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setSelectedCourseIds(new Set())}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
+            <ScrollArea className="max-h-48">
+              <div className="p-2 space-y-1">
+                {courses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No courses available</p>
+                ) : (
+                  courses.map(course => (
+                    <label 
+                      key={course.id} 
+                      className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={selectedCourseIds.has(course.id)}
+                        onCheckedChange={() => toggleCourseSelection(course.id, selectedCourseIds, setSelectedCourseIds)}
+                      />
+                      <span className="text-sm truncate">{course.title}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+            <div className="p-2 border-t">
+              <Button
+                size="sm"
+                className="w-full"
                 disabled={selectedCourseIds.size === 0}
-                onClick={() => {
-                  onBulkEnroll(Array.from(selectedCourseIds));
-                  setSelectedCourseIds(new Set());
-                }}
+                onClick={handleEnroll}
               >
-                Enroll in {selectedCourseIds.size} course{selectedCourseIds.size !== 1 ? 's' : ''}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                Enroll in {selectedCourseIds.size || 0} course{selectedCourseIds.size !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
-        {/* Bulk Unenroll - Multi-select */}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+        {/* Bulk Unenroll - Popover */}
+        <Popover open={unenrollOpen} onOpenChange={setUnenrollOpen}>
+          <PopoverTrigger asChild>
             <Button
               variant="secondary"
               size="sm"
@@ -152,53 +182,54 @@ export function BulkActionsBar({
               onClick={() => setUnenrollCourseIds(new Set())}
             >
               <BookMinus className="h-4 w-4 mr-2" />
-              Remove from Courses
+              Unenroll
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent className="max-h-[80vh] flex flex-col">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Remove Users from Courses</AlertDialogTitle>
-              <AlertDialogDescription>
-                Select one or more courses to remove {selectedCount} {selectedCount === 1 ? 'user' : 'users'} from.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4 space-y-2 max-h-60 overflow-auto flex-1">
-              {courses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No courses available.</p>
-              ) : (
-                courses.map(course => (
-                  <label 
-                    key={course.id} 
-                    className="flex items-center gap-3 p-2 hover:bg-muted rounded cursor-pointer"
-                  >
-                    <Checkbox
-                      checked={unenrollCourseIds.has(course.id)}
-                      onCheckedChange={() => toggleCourseSelection(course.id, unenrollCourseIds, setUnenrollCourseIds)}
-                    />
-                    <span className="text-sm">{course.title}</span>
-                  </label>
-                ))
-              )}
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="end">
+            <div className="p-3 border-b">
+              <p className="font-medium text-sm">Remove from Courses</p>
+              <p className="text-xs text-muted-foreground">
+                Select courses to remove {selectedCount} {selectedCount === 1 ? 'user' : 'users'} from
+              </p>
             </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setUnenrollCourseIds(new Set())}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
+            <ScrollArea className="max-h-48">
+              <div className="p-2 space-y-1">
+                {courses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No courses available</p>
+                ) : (
+                  courses.map(course => (
+                    <label 
+                      key={course.id} 
+                      className="flex items-center gap-2 p-2 hover:bg-muted rounded cursor-pointer"
+                    >
+                      <Checkbox
+                        checked={unenrollCourseIds.has(course.id)}
+                        onCheckedChange={() => toggleCourseSelection(course.id, unenrollCourseIds, setUnenrollCourseIds)}
+                      />
+                      <span className="text-sm truncate">{course.title}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+            <div className="p-2 border-t">
+              <Button
+                size="sm"
+                className="w-full"
+                variant="destructive"
                 disabled={unenrollCourseIds.size === 0}
-                onClick={() => {
-                  onBulkUnenroll(Array.from(unenrollCourseIds));
-                  setUnenrollCourseIds(new Set());
-                }}
+                onClick={handleUnenroll}
               >
-                Remove from {unenrollCourseIds.size} course{unenrollCourseIds.size !== 1 ? 's' : ''}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+                Remove from {unenrollCourseIds.size || 0} course{unenrollCourseIds.size !== 1 ? 's' : ''}
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
-        {/* Bulk Assign Organization - Super admin only */}
+        {/* Bulk Assign Organization - Popover */}
         {showOrgAssignment && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
+          <Popover open={orgOpen} onOpenChange={setOrgOpen}>
+            <PopoverTrigger asChild>
               <Button
                 variant="secondary"
                 size="sm"
@@ -207,18 +238,18 @@ export function BulkActionsBar({
                 <Building2 className="h-4 w-4 mr-2" />
                 Assign Org
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Assign to Organization</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Select an organization for {selectedCount} {selectedCount === 1 ? 'user' : 'users'}.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="py-4 space-y-2">
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0" align="end">
+              <div className="p-3 border-b">
+                <p className="font-medium text-sm">Assign to Organization</p>
+                <p className="text-xs text-muted-foreground">
+                  For {selectedCount} {selectedCount === 1 ? 'user' : 'users'}
+                </p>
+              </div>
+              <div className="p-3 space-y-3">
                 <Select value={assignOrgId} onValueChange={setAssignOrgId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select an organization" />
+                    <SelectValue placeholder="Select organization" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">
@@ -226,8 +257,8 @@ export function BulkActionsBar({
                     </SelectItem>
                     {organizations.map(org => {
                       const limitInfo = org.max_users 
-                        ? `(${org.userCount}/${org.max_users} users)` 
-                        : `(${org.userCount} users)`;
+                        ? `(${org.userCount}/${org.max_users})` 
+                        : `(${org.userCount})`;
                       const atLimit = org.max_users && (org.userCount + selectedCount) > org.max_users;
                       return (
                         <SelectItem key={org.id} value={org.id}>
@@ -240,48 +271,43 @@ export function BulkActionsBar({
                   </SelectContent>
                 </Select>
                 {wouldExceedLimit && (
-                  <p className="text-sm text-destructive">
-                    Warning: This would exceed the organization's user limit of {selectedOrg?.max_users}.
+                  <p className="text-xs text-destructive">
+                    Warning: Exceeds limit of {selectedOrg?.max_users}
                   </p>
                 )}
-              </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setAssignOrgId('')}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
+                <Button
+                  size="sm"
+                  className="w-full"
                   disabled={!assignOrgId || wouldExceedLimit}
-                  onClick={() => {
-                    onBulkAssignOrg(assignOrgId === 'none' ? null : assignOrgId);
-                    setAssignOrgId('');
-                  }}
+                  onClick={handleAssignOrg}
                 >
-                  {assignOrgId === 'none' ? 'Remove from Organization' : 'Assign to Organization'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                  {assignOrgId === 'none' ? 'Remove from Org' : 'Assign'}
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
         )}
 
-        {/* Bulk Reset Progress */}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
+        {/* Bulk Reset Progress - Popover */}
+        <Popover open={resetOpen} onOpenChange={setResetOpen}>
+          <PopoverTrigger asChild>
             <Button
               variant="secondary"
               size="sm"
               disabled={isProcessing}
             >
               <RotateCcw className="h-4 w-4 mr-2" />
-              Reset Progress
+              Reset
             </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Reset User Progress</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will reset training progress for {selectedCount} {selectedCount === 1 ? 'user' : 'users'}.
-                You can choose to reset progress for all courses or a specific course.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <div className="py-4">
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-0" align="end">
+            <div className="p-3 border-b">
+              <p className="font-medium text-sm">Reset Progress</p>
+              <p className="text-xs text-muted-foreground">
+                For {selectedCount} {selectedCount === 1 ? 'user' : 'users'}
+              </p>
+            </div>
+            <div className="p-3 space-y-3">
               <Select value={resetCourseId} onValueChange={setResetCourseId}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select scope" />
@@ -295,22 +321,22 @@ export function BulkActionsBar({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => setResetCourseId('all')}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={() => {
-                  onBulkResetProgress(resetCourseId === 'all' ? undefined : resetCourseId);
-                  setResetCourseId('all');
-                }}
+              <p className="text-xs text-muted-foreground">
+                This will clear progress, attempts, and certificates.
+              </p>
+              <Button
+                size="sm"
+                className="w-full"
+                variant="destructive"
+                onClick={handleReset}
               >
                 Reset Progress
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
 
-        {/* Bulk Delete */}
+        {/* Bulk Delete - Keep as AlertDialog for safety */}
         {canDeleteUsers && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
