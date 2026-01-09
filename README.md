@@ -1,73 +1,124 @@
-# Welcome to your Lovable project
+# SCL OT CSIR Training Platform
 
-## Project info
+A web-based micro-training platform for cybersecurity incident response training, built with React, TypeScript, and Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Overview
 
-## How can I edit this code?
+This platform delivers the Seattle City Light Operational Technology Cyber Security Incident Response Plan training through structured modules, assessments, and certifications. It supports multi-tenant organizations with role-based access control.
 
-There are several ways of editing your application.
+## Features
 
-**Use Lovable**
+- **Course Delivery**: Sequential learning modules with rich HTML content
+- **Assessments**: Knowledge check quizzes and final examinations
+- **Certificates**: Automatic generation with unique verification codes
+- **Multi-Tenancy**: Organization-based user management and course access
+- **Admin Dashboard**: Comprehensive reporting and user management
+- **Recertification**: Configurable recertification schedules per organization
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Technology Stack
 
-Changes made via Lovable will be committed automatically to this repo.
+| Category | Technologies |
+|----------|-------------|
+| Frontend | React 18, TypeScript, Vite |
+| Styling | Tailwind CSS, shadcn/ui |
+| State | TanStack React Query |
+| Routing | React Router v6 |
+| Backend | Supabase (Auth, Database, Edge Functions) |
+| Email | Resend API |
 
-**Use your preferred IDE**
+## Quick Start
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Prerequisites
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- Node.js 18+ and npm
+- Git
 
-Follow these steps:
+### Local Development
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
+```bash
+# Clone the repository
 git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app will be available at `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Environment Variables
 
-**Use GitHub Codespaces**
+Create a `.env` file with:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```env
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_anon_key
+```
 
-## What technologies are used for this project?
+## Documentation
 
-This project is built with:
+| Document | Description |
+|----------|-------------|
+| [Documentation Index](docs/INDEX.md) | Navigation hub for all docs |
+| [Architecture](docs/ARCHITECTURE.md) | System design and components |
+| [Database Schema](docs/DATABASE.md) | Tables, relationships, and RLS |
+| [API Reference](docs/API_REFERENCE.md) | Supabase client usage |
+| [Edge Functions](docs/EDGE_FUNCTIONS.md) | Backend function documentation |
+| [Security](docs/SECURITY.md) | Security model and practices |
+| [Deployment](docs/DEPLOYMENT.md) | Deployment guides |
+| [User Guide](docs/USER_GUIDE.md) | End-user documentation |
+| [Contributing](docs/CONTRIBUTING.md) | Developer guide |
+| [Hooks Reference](docs/HOOKS.md) | Custom React hooks |
+| [Testing](docs/TESTING.md) | Testing strategies |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common issues and solutions |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Project Structure
 
-## How can I deploy this project?
+```
+src/
+├── components/         # React components
+│   ├── admin/         # Admin dashboard components
+│   ├── landing/       # Role-based landing pages
+│   └── ui/            # shadcn/ui components
+├── hooks/             # Custom React hooks
+├── integrations/      # Supabase client and types
+├── lib/               # Utility functions
+└── pages/             # Route page components
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+supabase/
+└── functions/         # Edge functions
+    ├── accept-invitation/
+    ├── delete-user/
+    └── send-invitation/
 
-## Can I connect a custom domain to my Lovable project?
+docs/                  # Documentation
+```
 
-Yes, you can!
+## User Roles
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+| Role | Description |
+|------|-------------|
+| **Learner** | Takes courses, completes assessments, earns certificates |
+| **Org Admin** | Manages users and reports within their organization |
+| **Super Admin** | Full platform access, manages organizations and courses |
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## Deployment
+
+### Lovable.dev (Recommended)
+
+Click **Share → Publish** in the Lovable editor.
+
+### GitHub Pages
+
+See [Deployment Guide](docs/DEPLOYMENT.md) for detailed instructions.
+
+## License
+
+Proprietary - Seattle City Light
+
+## Support
+
+For issues and feature requests, please use the project's issue tracker.
