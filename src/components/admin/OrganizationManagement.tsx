@@ -23,6 +23,7 @@ interface Organization {
   id: string;
   name: string;
   description: string | null;
+  domain: string | null;
   active: boolean;
   logo_url: string | null;
   primary_color: string | null;
@@ -44,6 +45,7 @@ interface Course {
 interface FormData {
   name: string;
   description: string;
+  domain: string;
   active: boolean;
   logo_url: string;
   primary_color: string;
@@ -59,6 +61,7 @@ export function OrganizationManagement() {
   const [formData, setFormData] = useState<FormData>({
     name: '',
     description: '',
+    domain: '',
     active: true,
     logo_url: '',
     primary_color: '#3b82f6',
@@ -173,6 +176,7 @@ export function OrganizationManagement() {
       const { data: newOrg, error } = await supabase.from('organizations').insert({
         name: data.name.trim(),
         description: data.description.trim() || null,
+        domain: data.domain.trim().toLowerCase() || null,
         active: data.active,
         logo_url: data.logo_url || null,
         primary_color: data.primary_color || null,
@@ -214,6 +218,7 @@ export function OrganizationManagement() {
         .update({
           name: data.name.trim(),
           description: data.description.trim() || null,
+          domain: data.domain.trim().toLowerCase() || null,
           active: data.active,
           logo_url: data.logo_url || null,
           primary_color: data.primary_color || null,
@@ -267,6 +272,7 @@ export function OrganizationManagement() {
     setFormData({ 
       name: '', 
       description: '', 
+      domain: '',
       active: true,
       logo_url: '',
       primary_color: '#3b82f6',
@@ -282,6 +288,7 @@ export function OrganizationManagement() {
     setFormData({
       name: org.name,
       description: org.description || '',
+      domain: org.domain || '',
       active: org.active,
       logo_url: org.logo_url || '',
       primary_color: org.primary_color || '#3b82f6',
@@ -411,6 +418,18 @@ export function OrganizationManagement() {
                           placeholder="Brief description of the organization"
                           rows={3}
                         />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="domain">Email Domain</Label>
+                        <Input
+                          id="domain"
+                          value={formData.domain}
+                          onChange={(e) => setFormData({ ...formData, domain: e.target.value.toLowerCase() })}
+                          placeholder="e.g., acme.com"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Users signing up with this email domain will be auto-assigned to this organization
+                        </p>
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="max_users">User Limit</Label>
