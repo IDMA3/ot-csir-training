@@ -15,6 +15,7 @@ import { useAdminPermissions } from '@/hooks/useAdminPermissions';
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState<string>('overview');
+  const [initialOrgFilter, setInitialOrgFilter] = useState<string | undefined>(undefined);
   
   const { 
     isSuperAdmin, 
@@ -30,6 +31,12 @@ export default function Admin() {
   // Handle navigation from dashboard overview
   const handleNavigate = (tab: string) => {
     setActiveTab(tab);
+  };
+
+  // Handle navigation from organization user count to People tab with filter
+  const handleNavigateToPeopleWithOrg = (organizationName: string) => {
+    setInitialOrgFilter(organizationName);
+    setActiveTab('people');
   };
 
   return (
@@ -92,7 +99,7 @@ export default function Admin() {
 
           {/* People */}
           <TabsContent value="people" className="space-y-6">
-            <PeopleManagement />
+            <PeopleManagement initialOrganizationFilter={initialOrgFilter} onClearInitialFilter={() => setInitialOrgFilter(undefined)} />
           </TabsContent>
 
           {/* Onboard */}
@@ -109,7 +116,7 @@ export default function Admin() {
           {/* Organizations */}
           <TabsContent value="organizations" className="space-y-6">
             <OrganizationReports />
-            <OrganizationManagement />
+            <OrganizationManagement onNavigateToPeople={handleNavigateToPeopleWithOrg} />
           </TabsContent>
 
           {/* Analytics */}
