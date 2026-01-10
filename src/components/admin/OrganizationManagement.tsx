@@ -54,7 +54,11 @@ interface FormData {
   allowedCourseIds: string[];
 }
 
-export function OrganizationManagement() {
+interface OrganizationManagementProps {
+  onNavigateToPeople?: (organizationName: string) => void;
+}
+
+export function OrganizationManagement({ onNavigateToPeople }: OrganizationManagementProps = {}) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingOrg, setEditingOrg] = useState<OrganizationWithStats | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -713,7 +717,13 @@ export function OrganizationManagement() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Badge variant="secondary">{org.userCount}</Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className={onNavigateToPeople ? "cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors" : ""}
+                          onClick={() => onNavigateToPeople?.(org.name)}
+                        >
+                          {org.userCount}
+                        </Badge>
                         {org.max_users && (
                           <span className="text-xs text-muted-foreground">/ {org.max_users}</span>
                         )}

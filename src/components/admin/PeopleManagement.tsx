@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,12 @@ interface OrganizationWithCount {
   userCount: number;
 }
 
-export function PeopleManagement() {
+interface PeopleManagementProps {
+  initialOrganizationFilter?: string;
+  onClearInitialFilter?: () => void;
+}
+
+export function PeopleManagement({ initialOrganizationFilter, onClearInitialFilter }: PeopleManagementProps = {}) {
   const [nameFilter, setNameFilter] = useState('');
   const [organizationFilter, setOrganizationFilter] = useState<string>('all');
   const [courseFilter, setCourseFilter] = useState<string>('all');
@@ -42,6 +47,14 @@ export function PeopleManagement() {
   const { isSuperAdmin, organizationScope, canDeleteUsers } = useAdminPermissions();
   const { profile } = useAuth();
   const queryClient = useQueryClient();
+
+  // Apply initial organization filter when navigating from Organizations tab
+  useEffect(() => {
+    if (initialOrganizationFilter) {
+      setOrganizationFilter(initialOrganizationFilter);
+      onClearInitialFilter?.();
+    }
+  }, [initialOrganizationFilter, onClearInitialFilter]);
 
   // Fetch courses - filtered for org admins
   const { data: courses = [] } = useQuery({
